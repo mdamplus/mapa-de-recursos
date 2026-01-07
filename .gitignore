@@ -1,0 +1,25 @@
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node / builds
+node_modules/
+dist/
+build/
+
+# Entorno
+.env
+
+# IDEs
+.vscode/
+.idea/
+
+# Composer
+/vendor/
+
+# ZIPs
+*.zip
+
