@@ -1,0 +1,73 @@
+.mdr-app {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.mdr-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.mdr-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 16px;
+}
+
+.mdr-filters label {
+	display: flex;
+	flex-direction: column;
+	font-size: 14px;
+}
+
+.mdr-map {
+	width: 100%;
+	height: 420px;
+	border: 1px solid #dcdcdc;
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.mdr-list {
+	border: 1px solid #e5e5e5;
+	border-radius: 6px;
+	padding: 12px;
+	min-height: 60px;
+}
+
+.mdr-list ul {
+	margin: 0;
+	padding-left: 18px;
+}
+
+.mdr-list li {
+	cursor: pointer;
+	padding: 4px 0;
+}
+
+.mdr-status {
+	color: #4b5563;
+	font-size: 13px;
+}
+
+@media (min-width: 960px) {
+	.mdr-app {
+		flex-direction: row;
+	}
+	.mdr-map {
+		height: 600px;
+	}
+	#mdr-map {
+		flex: 2;
+	}
+	#mdr-list {
+		flex: 1;
+		max-height: 600px;
+		overflow-y: auto;
+	}
+	.mdr-controls {
+		flex-basis: 100%;
+	}
+}

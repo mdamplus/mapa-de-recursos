@@ -1,0 +1,277 @@
+<?php
+
+declare(strict_types=1);
+
+namespace MapaDeRecursos\Admin;
+
+use MapaDeRecursos\Cache;
+use MapaDeRecursos\Logs\Logger;
+use MapaDeRecursos\Pdf\PdfExporter;
+use MapaDeRecursos\Admin\Importer;
+
+if (! defined('ABSPATH')) {
+	exit;
+}
+
+class Admin {
+	private Logger $logger;
+	private Entities $entities;
+	private Recursos $recursos;
+	private Servicios $servicios;
+	private Reports $reports;
+	private Zonas $zonas;
+	private Ambitos $ambitos;
+	private Subcategorias $subcategorias;
+	private LogsPage $logs;
+	private Financiaciones $financiaciones;
+	private Importer $importer;
+
+	public function __construct(Logger $logger) {
+		$this->logger = $logger;
+		$this->entities = new Entities($logger);
+		$this->recursos = new Recursos($logger);
+		$this->servicios = new Servicios($logger);
+		$this->reports  = new Reports($logger, new PdfExporter($logger));
+		$this->zonas    = new Zonas($logger);
+		$this->ambitos  = new Ambitos($logger);
+		$this->subcategorias = new Subcategorias($logger);
+		$this->logs     = new LogsPage();
+		$this->financiaciones = new Financiaciones($logger);
+		$this->importer = new Importer($logger);
+	}
+
+	public function register(): void {
+		add_menu_page(
+			__('Mapa de recursos', 'mapa-de-recursos'),
+			__('Mapa de recursos', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_dashboard',
+			[$this, 'render_dashboard'],
+			'dashicons-location',
+			26
+		);
+
+		// Orden del submenú según especificación.
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Recursos', 'mapa-de-recursos'),
+			__('Recursos', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_recursos',
+			[$this, 'render_recursos']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Entidades', 'mapa-de-recursos'),
+			__('Entidades', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_entidades',
+			[$this, 'render_entidades']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Zonas', 'mapa-de-recursos'),
+			__('Zonas', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_zonas',
+			[$this, 'render_zonas']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Ámbitos', 'mapa-de-recursos'),
+			__('Ámbitos', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_ambitos',
+			[$this, 'render_ambitos']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Servicios / Iconos', 'mapa-de-recursos'),
+			__('Servicios / Iconos', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_servicios',
+			[$this, 'render_servicios']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Financiación', 'mapa-de-recursos'),
+			__('Financiación', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_financiaciones',
+			[$this, 'render_financiaciones']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Importar', 'mapa-de-recursos'),
+			__('Importar', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_import',
+			[$this, 'render_import']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Ajustes', 'mapa-de-recursos'),
+			__('Ajustes', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_settings',
+			[$this, 'render_settings']
+		);
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Informes / PDF', 'mapa-de-recursos'),
+			__('Informes / PDF', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_pdf',
+			[$this, 'render_pdf']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
+			__('Logs', 'mapa-de-recursos'),
+			__('Logs', 'mapa-de-recursos'),
+			'mdr_view_logs',
+			'mdr_logs',
+			[$this, 'render_logs']
+		);
+	}
+
+	public function render_dashboard(): void {
+		if (! current_user_can('mdr_manage')) {
+			wp_die(__('No tienes permisos.', 'mapa-de-recursos'));
+		}
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e('Mapa de recursos', 'mapa-de-recursos'); ?></h1>
+			<p><?php esc_html_e('Panel inicial del plugin. Próximamente se añadirán listados y formularios.', 'mapa-de-recursos'); ?></p>
+		</div>
+		<?php
+	}
+
+	public function render_settings(): void {
+		if (! current_user_can('mdr_manage')) {
+			wp_die(__('No tienes permisos.', 'mapa-de-recursos'));
+		}
+
+		if (isset($_POST['mdr_settings_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_settings_nonce'])), 'mdr_save_settings')) {
+			$settings = [
+				'map_provider'      => isset($_POST['map_provider']) ? sanitize_text_field(wp_unslash($_POST['map_provider'])) : 'osm',
+				'mapbox_token'      => isset($_POST['mapbox_token']) ? sanitize_text_field(wp_unslash($_POST['mapbox_token'])) : '',
+				'default_radius_km' => isset($_POST['default_radius_km']) ? floatval(wp_unslash($_POST['default_radius_km'])) : 5,
+				'fallback_center'   => [
+					'lat' => isset($_POST['fallback_lat']) ? floatval(wp_unslash($_POST['fallback_lat'])) : 36.7213,
+					'lng' => isset($_POST['fallback_lng']) ? floatval(wp_unslash($_POST['fallback_lng'])) : -4.4214,
+				],
+				'default_zona'      => isset($_POST['default_zona']) ? absint($_POST['default_zona']) : '',
+			];
+			update_option('mapa_de_recursos_settings', $settings);
+			$this->logger->log('update_settings', 'settings', ['provider' => $settings['map_provider']], 'plugin');
+			?>
+			<div class="notice notice-success"><p><?php esc_html_e('Ajustes guardados.', 'mapa-de-recursos'); ?></p></div>
+			<?php
+		}
+
+		$settings = get_option('mapa_de_recursos_settings', []);
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e('Ajustes del mapa', 'mapa-de-recursos'); ?></h1>
+			<form method="post">
+				<?php wp_nonce_field('mdr_save_settings', 'mdr_settings_nonce'); ?>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e('Proveedor de mapa', 'mapa-de-recursos'); ?></th>
+						<td>
+							<select name="map_provider">
+								<option value="osm" <?php selected($settings['map_provider'] ?? 'osm', 'osm'); ?>><?php esc_html_e('OpenStreetMap (Leaflet)', 'mapa-de-recursos'); ?></option>
+								<option value="mapbox" <?php selected($settings['map_provider'] ?? 'osm', 'mapbox'); ?>><?php esc_html_e('Mapbox', 'mapa-de-recursos'); ?></option>
+							</select>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Mapbox token', 'mapa-de-recursos'); ?></th>
+						<td>
+							<input type="text" name="mapbox_token" value="<?php echo isset($settings['mapbox_token']) ? esc_attr($settings['mapbox_token']) : ''; ?>" class="regular-text" />
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Radio por defecto (km)', 'mapa-de-recursos'); ?></th>
+						<td>
+							<input type="number" step="0.1" name="default_radius_km" value="<?php echo isset($settings['default_radius_km']) ? esc_attr($settings['default_radius_km']) : '5'; ?>" />
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Centro por defecto (lat,lng)', 'mapa-de-recursos'); ?></th>
+						<td>
+							<input type="text" name="fallback_lat" value="<?php echo isset($settings['fallback_center']['lat']) ? esc_attr($settings['fallback_center']['lat']) : '36.7213'; ?>" size="10" />
+							<input type="text" name="fallback_lng" value="<?php echo isset($settings['fallback_center']['lng']) ? esc_attr($settings['fallback_center']['lng']) : '-4.4214'; ?>" size="10" />
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Zona por defecto', 'mapa-de-recursos'); ?></th>
+						<td>
+							<input type="number" name="default_zona" value="<?php echo isset($settings['default_zona']) ? esc_attr((string) $settings['default_zona']) : ''; ?>" />
+						</td>
+					</tr>
+				</table>
+				<?php submit_button(__('Guardar ajustes', 'mapa-de-recursos')); ?>
+			</form>
+		</div>
+		<?php
+	}
+
+	public function render_entidades(): void {
+		$this->entities->handle_actions();
+		$this->entities->render();
+	}
+
+	public function render_recursos(): void {
+		$this->recursos->handle_actions();
+		$this->recursos->render();
+	}
+
+	public function render_servicios(): void {
+		$this->servicios->handle_actions();
+		$this->servicios->render();
+	}
+
+	public function render_financiaciones(): void {
+		$this->financiaciones->handle_actions();
+		$this->financiaciones->render();
+	}
+
+	public function render_import(): void {
+		$this->importer->handle_actions();
+		$this->importer->render();
+	}
+
+	public function render_zonas(): void {
+		$this->zonas->handle_actions();
+		$this->zonas->render();
+	}
+
+	public function render_ambitos(): void {
+		$this->ambitos->handle_actions();
+		$this->ambitos->render();
+	}
+
+	public function render_subcategorias(): void {
+		// La gestión se realiza desde Ámbitos (creación rápida). Mantenemos la página para compatibilidad pero la ocultamos del menú.
+		$this->subcategorias->handle_actions();
+		$this->subcategorias->render();
+	}
+
+	public function render_pdf(): void {
+		$this->reports->handle_actions();
+		$this->reports->render();
+	}
+
+	public function render_logs(): void {
+		$this->logs->render();
+	}
+}
