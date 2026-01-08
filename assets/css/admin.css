@@ -33,6 +33,32 @@
 	flex: 1 1 30%;
 }
 
+.mdr-kb-accordion .card {
+	margin-bottom: 12px;
+}
+
+.mdr-kb-img img {
+	max-width: 100%;
+	height: auto;
+	display: block;
+	border: 1px solid #e5e5e5;
+	border-radius: 4px;
+	margin: 8px 0;
+}
+
+.mdr-kb-gallery {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 8px;
+}
+
+.mdr-kb-gallery img {
+	width: 100%;
+	height: auto;
+	border: 1px solid #e5e5e5;
+	border-radius: 4px;
+}
+
 @media (min-width: 900px) {
 	.mdr-admin-grid {
 		grid-template-columns: 1fr 1fr;

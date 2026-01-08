@@ -6,6 +6,7 @@
 		initGeocode();
 		initServiceUploader();
 		initContactos();
+		initKbAccordion();
 	});
 
 	function initMediaUploader() {
@@ -144,6 +145,26 @@
 		$wrap.on('click', '.mdr-contacto-remove', function (e) {
 			e.preventDefault();
 			$(this).closest('.mdr-contacto-row').remove();
+		});
+	}
+
+	function initKbAccordion() {
+		const cards = document.querySelectorAll('.mdr-kb-card');
+		if (!cards.length) {
+			return;
+		}
+		cards.forEach((card) => {
+			const toggle = card.querySelector('.mdr-kb-toggle');
+			const content = card.querySelector('.mdr-kb-content');
+			if (!toggle || !content) return;
+			toggle.addEventListener('click', () => {
+				const open = card.classList.toggle('is-open');
+				const icon = toggle.querySelector('.dashicons');
+				if (icon) {
+					icon.classList.toggle('dashicons-arrow-up-alt2', open);
+					icon.classList.toggle('dashicons-arrow-down-alt2', !open);
+				}
+			});
 		});
 	}
 })(jQuery);

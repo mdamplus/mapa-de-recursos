@@ -8,6 +8,7 @@ use MapaDeRecursos\Cache;
 use MapaDeRecursos\Logs\Logger;
 use MapaDeRecursos\Pdf\PdfExporter;
 use MapaDeRecursos\Admin\Importer;
+use MapaDeRecursos\Admin\KnowledgeBase;
 
 if (! defined('ABSPATH')) {
 	exit;
@@ -25,6 +26,7 @@ class Admin {
 	private LogsPage $logs;
 	private Financiaciones $financiaciones;
 	private Importer $importer;
+	private KnowledgeBase $knowledge;
 
 	public function __construct(Logger $logger) {
 		$this->logger = $logger;
@@ -38,6 +40,7 @@ class Admin {
 		$this->logs     = new LogsPage();
 		$this->financiaciones = new Financiaciones($logger);
 		$this->importer = new Importer($logger);
+		$this->knowledge = new KnowledgeBase();
 	}
 
 	public function register(): void {
@@ -117,6 +120,15 @@ class Admin {
 
 		add_submenu_page(
 			'mdr_dashboard',
+			__('Knowledge Base', 'mapa-de-recursos'),
+			__('Knowledge Base', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_knowledge',
+			[$this, 'render_knowledge']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
 			__('Ajustes', 'mapa-de-recursos'),
 			__('Ajustes', 'mapa-de-recursos'),
 			'mdr_manage',
@@ -177,6 +189,10 @@ class Admin {
 			<?php
 		}
 
+		if (isset($_POST['mdr_geocode_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_geocode_nonce'])), 'mdr_geocode_all')) {
+			$this->geocode_all_entities();
+		}
+
 		$settings = get_option('mapa_de_recursos_settings', []);
 		?>
 		<div class="wrap">
@@ -221,6 +237,13 @@ class Admin {
 				</table>
 				<?php submit_button(__('Guardar ajustes', 'mapa-de-recursos')); ?>
 			</form>
+			<hr />
+			<h2><?php esc_html_e('Utilidades', 'mapa-de-recursos'); ?></h2>
+			<form method="post">
+				<?php wp_nonce_field('mdr_geocode_all', 'mdr_geocode_nonce'); ?>
+				<p><?php esc_html_e('Actualizar latitud/longitud de todas las entidades usando su dirección (Nominatim). Solo se procesan las que no tengan lat/lng o estén en 0.0000000.', 'mapa-de-recursos'); ?></p>
+				<?php submit_button(__('Actualizar lat/lng', 'mapa-de-recursos'), 'secondary'); ?>
+			</form>
 		</div>
 		<?php
 	}
@@ -250,6 +273,10 @@ class Admin {
 		$this->importer->render();
 	}
 
+	public function render_knowledge(): void {
+		$this->knowledge->render();
+	}
+
 	public function render_zonas(): void {
 		$this->zonas->handle_actions();
 		$this->zonas->render();
@@ -273,5 +300,89 @@ class Admin {
 
 	public function render_logs(): void {
 		$this->logs->render();
+	}
+
+	private function geocode_all_entities(): void {
+		global $wpdb;
+		$table = "{$wpdb->prefix}mdr_entidades";
+
+		$entities = $wpdb->get_results("SELECT * FROM {$table} WHERE ((lat IS NULL OR lng IS NULL) OR (lat = 0 OR lng = 0)) AND (direccion_linea1 <> '' OR ciudad <> '' OR provincia <> '' OR pais <> '' OR cp <> '') LIMIT 200");
+		if (! $entities) {
+			echo '<div class="notice notice-info"><p>' . esc_html__('No hay entidades pendientes de geolocalizar.', 'mapa-de-recursos') . '</p></div>';
+			return;
+		}
+
+		$updated = 0;
+		$failed  = 0;
+		foreach ($entities as $ent) {
+			$address_parts = array_filter([
+				$ent->direccion_linea1,
+				$ent->cp,
+				$ent->ciudad,
+				$ent->provincia,
+				$ent->pais,
+			]);
+			$address = implode(', ', $address_parts);
+			if ($address === '') {
+				$failed++;
+				continue;
+			}
+
+			$coords = $this->geocode_address($address);
+			if (! $coords) {
+				$failed++;
+				continue;
+			}
+
+			$wpdb->update(
+				$table,
+				[
+					'lat' => $coords['lat'],
+					'lng' => $coords['lng'],
+				],
+				['id' => $ent->id],
+				['%f','%f'],
+				['%d']
+			);
+			$updated++;
+		}
+
+		$this->logger->log('geocode_entities', 'entidad', ['updated' => $updated, 'failed' => $failed], 'geocode');
+
+		printf(
+			'<div class="notice notice-success"><p>%s</p></div>',
+			esc_html(sprintf(__('Geocodificación completada. Actualizadas: %d. Fallidas: %d.', 'mapa-de-recursos'), $updated, $failed))
+		);
+	}
+
+	private function geocode_address(string $address): ?array {
+		$url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' . rawurlencode($address);
+		$response = wp_remote_get($url, [
+			'timeout' => 12,
+			'headers' => [
+				'Accept' => 'application/json',
+				'User-Agent' => 'mapa-de-recursos/1.0',
+			],
+		]);
+
+		if (is_wp_error($response)) {
+			return null;
+		}
+
+		$code = (int) wp_remote_retrieve_response_code($response);
+		if ($code !== 200) {
+			return null;
+		}
+
+		$body = wp_remote_retrieve_body($response);
+		$data = json_decode($body, true);
+		if (! is_array($data) || empty($data[0]['lat']) || empty($data[0]['lon'])) {
+			return null;
+		}
+
+		return [
+			'lat' => (float) $data[0]['lat'],
+			'lng' => (float) $data[0]['lon'],
+		];
 	}
 }

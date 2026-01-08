@@ -41,7 +41,7 @@ class Importer {
 		$preview_type = '';
 		if (! empty($_FILES['mdr_csv_file']['tmp_name']) && isset($_POST['tipo'])) {
 			$preview_type = sanitize_text_field(wp_unslash($_POST['tipo']));
-			$preview_data = $this->parse_csv(file_get_contents($_FILES['mdr_csv_file']['tmp_name']));
+			$preview_data = $this->parse_uploaded_file($_FILES['mdr_csv_file']);
 		}
 
 		?>
@@ -66,8 +66,8 @@ class Importer {
 						</td>
 					</tr>
 					<tr>
-						<th><label for="mdr_csv_file"><?php esc_html_e('Archivo CSV', 'mapa-de-recursos'); ?></label></th>
-						<td><input type="file" name="mdr_csv_file" id="mdr_csv_file" accept=".csv,text/csv" required></td>
+						<th><label for="mdr_csv_file"><?php esc_html_e('Archivo CSV o XLSX', 'mapa-de-recursos'); ?></label></th>
+						<td><input type="file" name="mdr_csv_file" id="mdr_csv_file" accept=".csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></td>
 					</tr>
 				</table>
 				<?php submit_button(__('Previsualizar', 'mapa-de-recursos')); ?>
@@ -84,17 +84,37 @@ class Importer {
 					<?php submit_button(__('Importar', 'mapa-de-recursos')); ?>
 				</form>
 				<h3><?php esc_html_e('Vista tabla', 'mapa-de-recursos'); ?></h3>
-				<table class="widefat striped">
-					<tbody>
-						<?php foreach (array_slice($preview_data, 0, 10) as $row) : ?>
+				<?php
+				$max_cols = 0;
+				foreach ($preview_data as $r) {
+					$max_cols = max($max_cols, count($r));
+				}
+				?>
+				<div style="overflow:auto; max-height:480px; border:1px solid #e5e5e5; border-radius:4px;">
+					<table class="widefat striped">
+						<thead>
 							<tr>
-								<?php foreach ($row as $cell) : ?>
-									<td><?php echo esc_html($cell); ?></td>
-								<?php endforeach; ?>
+								<th>#</th>
+								<?php for ($c = 1; $c <= $max_cols; $c++) : ?>
+									<th><?php echo esc_html($c); ?></th>
+								<?php endfor; ?>
 							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							<?php foreach ($preview_data as $idx => $row) : ?>
+								<tr>
+									<th><?php echo esc_html((string) ($idx + 1)); ?></th>
+									<?php
+									for ($c = 0; $c < $max_cols; $c++) {
+										$cell = $row[$c] ?? '';
+										echo '<td>' . esc_html($cell) . '</td>';
+									}
+									?>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
 			<?php endif; ?>
 		</div>
 		<?php
@@ -113,6 +133,64 @@ class Importer {
 			}
 		}
 		return $rows;
+	}
+
+	private function parse_xlsx(string $path): array {
+		if (! is_readable($path)) {
+			return [];
+		}
+		$data = [];
+		if (! class_exists('ZipArchive')) {
+			return [];
+		}
+		$zip = new \ZipArchive();
+		if ($zip->open($path) !== true) {
+			return [];
+		}
+		// Simple parser: read sharedStrings and first sheet sheet1.xml
+		$shared = [];
+		if (($index = $zip->locateName('xl/sharedStrings.xml')) !== false) {
+			$xml = simplexml_load_string($zip->getFromIndex($index));
+			foreach ($xml->si as $si) {
+				$shared[] = (string) $si->t;
+			}
+		}
+		if (($sheetIndex = $zip->locateName('xl/worksheets/sheet1.xml')) === false) {
+			$zip->close();
+			return [];
+		}
+		$sheet = simplexml_load_string($zip->getFromIndex($sheetIndex));
+		$sheet->registerXPathNamespace('a', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+		foreach ($sheet->sheetData->row as $row) {
+			$current = [];
+			foreach ($row->c as $c) {
+				$type = (string) $c['t'];
+				$v = (string) $c->v;
+				if ($type === 's') {
+					$current[] = $shared[(int) $v] ?? '';
+				} else {
+					$current[] = $v;
+				}
+			}
+			if ($current) {
+				$data[] = $current;
+			}
+		}
+		$zip->close();
+		return $data;
+	}
+
+	private function parse_uploaded_file(array $file): array {
+		$type = $file['type'] ?? '';
+		$tmp = $file['tmp_name'] ?? '';
+		if (! $tmp || ! is_readable($tmp)) {
+			return [];
+		}
+		$ext = strtolower(pathinfo($file['name'] ?? '', PATHINFO_EXTENSION));
+		if ($ext === 'xlsx' || $type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+			return $this->parse_xlsx($tmp);
+		}
+		return $this->parse_csv(file_get_contents($tmp));
 	}
 
 	private function csv_to_string(array $rows): string {
@@ -369,11 +447,24 @@ class Importer {
 			$periodo_fin    = sanitize_text_field($row[8] ?? '');
 			$ent_gestora_nombre = sanitize_text_field($row[9] ?? '');
 			$finan_nombre   = sanitize_text_field($row[10] ?? '');
-			$contacto_nombre = sanitize_text_field($row[11] ?? '');
-			$contacto_email = sanitize_email($row[12] ?? '');
-			$contacto_tel   = sanitize_text_field($row[13] ?? '');
-			$servicio_nombre = sanitize_text_field($row[14] ?? '');
-			$activo         = isset($row[15]) ? (int) $row[15] : 1;
+			$servicio_nombre = sanitize_text_field($row[11] ?? '');
+			$activo         = isset($row[12]) ? (int) $row[12] : 1;
+			// Contactos múltiples a partir de la columna 13 en grupos de 3: nombre, email, tel.
+			$contactos_cols = array_slice($row, 13);
+			$contactos = [];
+			for ($i = 0; $i < count($contactos_cols); $i += 3) {
+				$c_nombre = sanitize_text_field($contactos_cols[$i] ?? '');
+				$c_email  = sanitize_email($contactos_cols[$i + 1] ?? '');
+				$c_tel    = sanitize_text_field($contactos_cols[$i + 2] ?? '');
+				if ($c_nombre === '' && $c_email === '' && $c_tel === '') {
+					continue;
+				}
+				$contactos[] = [
+					'nombre' => $c_nombre,
+					'email' => $c_email,
+					'telefono' => $c_tel,
+				];
+			}
 
 			$entidad_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE nombre = %s LIMIT 1", $entidad_nombre));
 			if (! $entidad_id) {

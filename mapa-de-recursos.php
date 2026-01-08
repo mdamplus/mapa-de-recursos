@@ -5,6 +5,7 @@
  * Description: Geolocaliza al usuario y muestra recursos cercanos en un mapa con filtros y clustering.
  * Version: 2026.1
  * Author: Martín D. Arnedo Mahr
+ * Author URI:  https://martinarnedo.com/?ztrack=mapa-de-recursos
  * Text Domain: mapa-de-recursos
  * Domain Path: /languages
  * Requires at least: 6.0
