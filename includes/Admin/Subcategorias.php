@@ -147,28 +147,27 @@ class Subcategorias {
 							</tr>
 						</thead>
 						<tbody>
-							<?php if ($list) : foreach ($list as $item) : ?>
-								<tr>
-									<?php if ($can_bulk) : ?>
-										<td><input type="checkbox" name="mdr_subcat_ids[]" value="<?php echo esc_attr((string) $item->id); ?>"></td>
-									<?php endif; ?>
-									<td><?php echo esc_html((string) $item->id); ?></td>
-									<td><?php echo esc_html($item->ambito_nombre); ?></td>
-									<td><?php echo esc_html($item->nombre); ?></td>
-									<td>
-										<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_subcategorias', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
-										|
-										<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_subcategorias', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_subcat')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta subcategoría?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
-									</td>
-								</tr>
-							<?php endforeach; else : ?>
-								<tr><td colspan="<?php echo $can_bulk ? 5 : 4; ?>"><?php esc_html_e('Sin subcategorías todavía.', 'mapa-de-recursos'); ?></td></tr>
+					<?php if ($list) : foreach ($list as $item) : ?>
+						<tr>
+							<?php if ($can_bulk) : ?>
+								<td><input type="checkbox" name="mdr_subcat_ids[]" value="<?php echo esc_attr((string) $item->id); ?>"></td>
 							<?php endif; ?>
-						</tbody>
-					</table>
-					<?php if ($can_bulk) : ?>
-						<button type="submit" class="button button-secondary"><?php esc_html_e('Eliminar seleccionadas', 'mapa-de-recursos'); ?></button>
+							<td><?php echo esc_html((string) $item->id); ?></td>
+							<td><?php echo esc_html($item->ambito_nombre); ?></td>
+							<td><?php echo esc_html($item->nombre); ?></td>
+							<td class="mdr-actions">
+								<a class="button button-primary button-small" href="<?php echo esc_url(add_query_arg(['page' => 'mdr_subcategorias', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+								<a class="button button-secondary button-small is-danger" href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_subcategorias', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_subcat')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta subcategoría?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+							</td>
+						</tr>
+					<?php endforeach; else : ?>
+						<tr><td colspan="<?php echo $can_bulk ? 5 : 4; ?>"><?php esc_html_e('Sin subcategorías todavía.', 'mapa-de-recursos'); ?></td></tr>
 					<?php endif; ?>
+					</tbody>
+				</table>
+				<?php if ($can_bulk) : ?>
+					<button type="submit" class="button button-secondary is-danger"><?php esc_html_e('Eliminar seleccionadas', 'mapa-de-recursos'); ?></button>
+				<?php endif; ?>
 				</form>
 				</div>
 			</div>
