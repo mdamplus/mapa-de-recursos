@@ -32,6 +32,9 @@ class Ambitos {
 		if (isset($_GET['action'], $_GET['id'], $_GET['_wpnonce']) && $_GET['action'] === 'delete' && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'mdr_delete_ambito')) {
 			$this->delete(absint($_GET['id']));
 		}
+		if (current_user_can('manage_options') && isset($_POST['mdr_ambitos_bulk_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_ambitos_bulk_nonce'])), 'mdr_ambitos_bulk_delete')) {
+			$this->bulk_delete();
+		}
 	}
 
 	private function save(): void {
@@ -92,6 +95,7 @@ class Ambitos {
 
 		$list = $this->get_all_with_subcats();
 		$ambitos = $this->get_all();
+		$can_bulk = current_user_can('manage_options');
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e('Ámbitos', 'mapa-de-recursos'); ?></h1>
@@ -137,9 +141,16 @@ class Ambitos {
 						<?php submit_button(__('Crear subcategoría', 'mapa-de-recursos')); ?>
 					</form>
 					<h2 style="margin-top:24px;"><?php esc_html_e('Listado', 'mapa-de-recursos'); ?></h2>
+				<form method="post">
+					<?php if ($can_bulk) : ?>
+						<?php wp_nonce_field('mdr_ambitos_bulk_delete', 'mdr_ambitos_bulk_nonce'); ?>
+					<?php endif; ?>
 					<table class="widefat striped">
 						<thead>
 							<tr>
+								<?php if ($can_bulk) : ?>
+									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_ambito_ids[]"></th>
+								<?php endif; ?>
 								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
 								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
 								<th><?php esc_html_e('Subcategorías', 'mapa-de-recursos'); ?></th>
@@ -149,6 +160,9 @@ class Ambitos {
 						<tbody>
 							<?php if ($list) : foreach ($list as $item) : ?>
 								<tr>
+									<?php if ($can_bulk) : ?>
+										<td><input type="checkbox" name="mdr_ambito_ids[]" value="<?php echo esc_attr((string) $item->id); ?>"></td>
+									<?php endif; ?>
 									<td><?php echo esc_html((string) $item->id); ?></td>
 									<td><?php echo esc_html($item->nombre); ?></td>
 									<td>
@@ -167,10 +181,14 @@ class Ambitos {
 									</td>
 								</tr>
 							<?php endforeach; else : ?>
-								<tr><td colspan="4"><?php esc_html_e('Sin ámbitos todavía.', 'mapa-de-recursos'); ?></td></tr>
+								<tr><td colspan="<?php echo $can_bulk ? 5 : 4; ?>"><?php esc_html_e('Sin ámbitos todavía.', 'mapa-de-recursos'); ?></td></tr>
 							<?php endif; ?>
 						</tbody>
 					</table>
+					<?php if ($can_bulk) : ?>
+						<button type="submit" class="button button-secondary"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
+					<?php endif; ?>
+				</form>
 				</div>
 			</div>
 		</div>
@@ -241,13 +259,31 @@ class Ambitos {
 		add_settings_error('mdr_subcat_quick', 'saved', __('Subcategoría guardada.', 'mapa-de-recursos'), 'updated');
 	}
 
-	private function delete(int $id): void {
+	private function delete(int $id, bool $suppress_redirect = false): void {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_ambitos";
+		$sub   = "{$wpdb->prefix}mdr_subcategorias";
+		$wpdb->delete($sub, ['ambito_id' => $id], ['%d']);
 		$wpdb->delete($table, ['id' => $id], ['%d']);
 		Cache::flush_all();
 		$this->logger->log('delete_ambito', 'ambito', ['id' => $id], 'ambito');
 
+		if (! $suppress_redirect && ! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_ambitos', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
+	}
+
+	private function bulk_delete(): void {
+		if (! current_user_can('manage_options')) {
+			return;
+		}
+		if (empty($_POST['mdr_ambito_ids']) || ! is_array($_POST['mdr_ambito_ids'])) {
+			return;
+		}
+		foreach ($_POST['mdr_ambito_ids'] as $id) {
+			$this->delete(absint($id), true);
+		}
 		if (! headers_sent()) {
 			wp_safe_redirect(add_query_arg(['page' => 'mdr_ambitos', 'deleted' => 'true'], admin_url('admin.php')));
 			exit;

@@ -449,8 +449,18 @@ class Importer {
 			$finan_nombre   = sanitize_text_field($row[10] ?? '');
 			$servicio_nombre = sanitize_text_field($row[11] ?? '');
 			$activo         = isset($row[12]) ? (int) $row[12] : 1;
-			// Contactos múltiples a partir de la columna 13 en grupos de 3: nombre, email, tel.
-			$contactos_cols = array_slice($row, 13);
+
+			// IDs opcionales (prioridad sobre nombres si existen).
+			$entidad_id = isset($row[13]) ? (int) $row[13] : 0;
+			$ambito_id  = isset($row[14]) ? (int) $row[14] : 0;
+			$subcat_id  = isset($row[15]) ? (int) $row[15] : 0;
+			$servicio_id_csv = isset($row[16]) ? (int) $row[16] : 0;
+			$finan_id_csv = isset($row[17]) ? (int) $row[17] : 0;
+			$ent_gestora_id_csv = isset($row[18]) ? (int) $row[18] : 0;
+
+			$contact_start = count($row) > 18 ? 19 : 13;
+			// Contactos múltiples en grupos de 3 columnas: nombre, email, tel.
+			$contactos_cols = array_slice($row, $contact_start);
 			$contactos = [];
 			for ($i = 0; $i < count($contactos_cols); $i += 3) {
 				$c_nombre = sanitize_text_field($contactos_cols[$i] ?? '');
@@ -466,50 +476,71 @@ class Importer {
 				];
 			}
 
-			$entidad_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE nombre = %s LIMIT 1", $entidad_nombre));
+			// Entidad: prioridad ID si existe, si no, por nombre.
+			if ($entidad_id > 0) {
+				$entidad_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE id = %d", $entidad_id));
+			} else {
+				$entidad_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE nombre = %s LIMIT 1", $entidad_nombre));
+			}
 			if (! $entidad_id) {
 				continue;
 			}
-			$ambito_id = 0;
-			if ($ambito_nombre) {
+
+			// Ámbito.
+			if ($ambito_id > 0) {
+				$ambito_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$ambitos_table} WHERE id = %d", $ambito_id));
+			} elseif ($ambito_nombre) {
 				$ambito_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$ambitos_table} WHERE nombre = %s LIMIT 1", $ambito_nombre));
 				if (! $ambito_id) {
 					$wpdb->insert($ambitos_table, ['nombre' => $ambito_nombre, 'slug' => sanitize_title($ambito_nombre)], ['%s','%s']);
 					$ambito_id = (int) $wpdb->insert_id;
 				}
+			} else {
+				$ambito_id = 0;
 			}
-			$subcat_id = 0;
-			if ($subcat_nombre && $ambito_id) {
+
+			// Subcategoría.
+			if ($subcat_id > 0) {
+				$subcat_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$subcats_table} WHERE id = %d", $subcat_id));
+			} elseif ($subcat_nombre && $ambito_id) {
 				$subcat_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$subcats_table} WHERE ambito_id = %d AND nombre = %s LIMIT 1", $ambito_id, $subcat_nombre));
 				if (! $subcat_id) {
 					$wpdb->insert($subcats_table, ['ambito_id' => $ambito_id, 'nombre' => $subcat_nombre, 'slug' => sanitize_title($subcat_nombre)], ['%d','%s','%s']);
 					$subcat_id = (int) $wpdb->insert_id;
 				}
-			}
-			$servicio_id = 0;
-			if ($servicio_nombre) {
-				$servicio_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$servicios_table} WHERE nombre = %s LIMIT 1", $servicio_nombre));
-			}
-			$finan_id = 0;
-			if ($finan_nombre) {
-				$finan_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$finan_table} WHERE nombre = %s LIMIT 1", $finan_nombre));
-			}
-			$ent_gestora_id = 0;
-			if ($ent_gestora_nombre) {
-				$ent_gestora_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE nombre = %s LIMIT 1", $ent_gestora_nombre));
-			}
-			$contactos = [];
-			if ($contacto_nombre || $contacto_email || $contacto_tel) {
-				$contactos[] = [
-					'nombre' => $contacto_nombre,
-					'email' => $contacto_email,
-					'telefono' => $contacto_tel,
-				];
+			} else {
+				$subcat_id = 0;
 			}
 
-			$wpdb->insert($recursos_table, [
-				'entidad_id' => $entidad_id,
-				'ambito_id' => $ambito_id ?: null,
+			// Servicio.
+			if ($servicio_id_csv > 0) {
+				$servicio_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$servicios_table} WHERE id = %d", $servicio_id_csv));
+			} elseif ($servicio_nombre) {
+				$servicio_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$servicios_table} WHERE nombre = %s LIMIT 1", $servicio_nombre));
+			} else {
+				$servicio_id = 0;
+			}
+
+			// Financiación.
+			if ($finan_id_csv > 0) {
+				$finan_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$finan_table} WHERE id = %d", $finan_id_csv));
+			} elseif ($finan_nombre) {
+				$finan_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$finan_table} WHERE nombre = %s LIMIT 1", $finan_nombre));
+			} else {
+				$finan_id = 0;
+			}
+
+			// Entidad gestora.
+			if ($ent_gestora_id_csv > 0) {
+				$ent_gestora_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE id = %d", $ent_gestora_id_csv));
+			} elseif ($ent_gestora_nombre) {
+				$ent_gestora_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE nombre = %s LIMIT 1", $ent_gestora_nombre));
+			} else {
+				$ent_gestora_id = 0;
+			}
+				$wpdb->insert($recursos_table, [
+					'entidad_id' => $entidad_id,
+					'ambito_id' => $ambito_id ?: null,
 				'subcategoria_id' => $subcat_id ?: null,
 				'recurso_programa' => $recurso_prog,
 				'descripcion' => $descripcion,

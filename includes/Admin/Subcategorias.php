@@ -26,6 +26,12 @@ class Subcategorias {
 		if (isset($_POST['mdr_subcat_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_subcat_nonce'])), 'mdr_save_subcat')) {
 			$this->save();
 		}
+		if (isset($_GET['action'], $_GET['id'], $_GET['_wpnonce']) && 'delete' === $_GET['action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'mdr_delete_subcat')) {
+			$this->delete(absint($_GET['id']));
+		}
+		if (current_user_can('manage_options') && isset($_POST['mdr_subcats_bulk_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_subcats_bulk_nonce'])), 'mdr_subcats_bulk_delete')) {
+			$this->bulk_delete();
+		}
 	}
 
 	private function save(): void {
@@ -87,6 +93,7 @@ class Subcategorias {
 
 		$list = $this->get_all();
 		$ambitos = $this->get_ambitos();
+		$can_bulk = current_user_can('manage_options');
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e('Subcategorías', 'mapa-de-recursos'); ?></h1>
@@ -123,9 +130,16 @@ class Subcategorias {
 				</div>
 				<div class="mdr-admin-col">
 					<h2><?php esc_html_e('Listado', 'mapa-de-recursos'); ?></h2>
+				<form method="post">
+					<?php if ($can_bulk) : ?>
+						<?php wp_nonce_field('mdr_subcats_bulk_delete', 'mdr_subcats_bulk_nonce'); ?>
+					<?php endif; ?>
 					<table class="widefat striped">
 						<thead>
 							<tr>
+								<?php if ($can_bulk) : ?>
+									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_subcat_ids[]"></th>
+								<?php endif; ?>
 								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
 								<th><?php esc_html_e('Ámbito', 'mapa-de-recursos'); ?></th>
 								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
@@ -135,16 +149,27 @@ class Subcategorias {
 						<tbody>
 							<?php if ($list) : foreach ($list as $item) : ?>
 								<tr>
+									<?php if ($can_bulk) : ?>
+										<td><input type="checkbox" name="mdr_subcat_ids[]" value="<?php echo esc_attr((string) $item->id); ?>"></td>
+									<?php endif; ?>
 									<td><?php echo esc_html((string) $item->id); ?></td>
 									<td><?php echo esc_html($item->ambito_nombre); ?></td>
 									<td><?php echo esc_html($item->nombre); ?></td>
-									<td><a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_subcategorias', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a></td>
+									<td>
+										<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_subcategorias', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+										|
+										<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_subcategorias', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_subcat')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta subcategoría?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+									</td>
 								</tr>
 							<?php endforeach; else : ?>
-								<tr><td colspan="4"><?php esc_html_e('Sin subcategorías todavía.', 'mapa-de-recursos'); ?></td></tr>
+								<tr><td colspan="<?php echo $can_bulk ? 5 : 4; ?>"><?php esc_html_e('Sin subcategorías todavía.', 'mapa-de-recursos'); ?></td></tr>
 							<?php endif; ?>
 						</tbody>
 					</table>
+					<?php if ($can_bulk) : ?>
+						<button type="submit" class="button button-secondary"><?php esc_html_e('Eliminar seleccionadas', 'mapa-de-recursos'); ?></button>
+					<?php endif; ?>
+				</form>
 				</div>
 			</div>
 		</div>
@@ -173,5 +198,34 @@ class Subcategorias {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_ambitos";
 		return (array) $wpdb->get_results("SELECT id, nombre FROM {$table} ORDER BY nombre ASC");
+	}
+
+	private function delete(int $id, bool $suppress_redirect = false): void {
+		global $wpdb;
+		$table = "{$wpdb->prefix}mdr_subcategorias";
+		$wpdb->delete($table, ['id' => $id], ['%d']);
+		Cache::flush_all();
+		$this->logger->log('delete_subcategoria', 'subcategoria', ['id' => $id], 'subcategoria');
+
+		if (! $suppress_redirect && ! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_subcategorias', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
+	}
+
+	private function bulk_delete(): void {
+		if (! current_user_can('manage_options')) {
+			return;
+		}
+		if (empty($_POST['mdr_subcat_ids']) || ! is_array($_POST['mdr_subcat_ids'])) {
+			return;
+		}
+		foreach ($_POST['mdr_subcat_ids'] as $id) {
+			$this->delete(absint($id), true);
+		}
+		if (! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_subcategorias', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
 	}
 }

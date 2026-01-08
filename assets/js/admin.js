@@ -7,6 +7,8 @@
 		initServiceUploader();
 		initContactos();
 		initKbAccordion();
+		initAddressAutocomplete();
+		initSelectAll();
 	});
 
 	function initMediaUploader() {
@@ -164,6 +166,87 @@
 					icon.classList.toggle('dashicons-arrow-up-alt2', open);
 					icon.classList.toggle('dashicons-arrow-down-alt2', !open);
 				}
+			});
+		});
+	}
+
+	function initAddressAutocomplete() {
+		const $input = $('#direccion_linea1');
+		const $list = $('#mdr-addr-suggestions');
+		if (!$input.length || !$list.length) {
+			return;
+		}
+		let timer = null;
+		$input.on('input', function () {
+			clearTimeout(timer);
+			const q = $input.val();
+			if (!q || q.length < 3) {
+				$list.empty().hide();
+				return;
+			}
+			timer = setTimeout(() => {
+				const extra = [
+					$('#cp').val(),
+					$('#ciudad').val(),
+					$('#provincia').val(),
+					$('#pais').val(),
+				].filter(Boolean).join(', ');
+				const query = q + (extra ? ', ' + extra : '');
+				fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&q=' + encodeURIComponent(query), {
+					headers: {
+						'Accept': 'application/json',
+						'User-Agent': 'mdr-plugin/1.0',
+					},
+				})
+					.then((res) => res.json())
+					.then((data) => {
+						if (!Array.isArray(data) || !data.length) {
+							$list.empty().hide();
+							return;
+						}
+						const items = data.map((item) => {
+							return `<div class="mdr-addr-item" data-lat="${item.lat}" data-lng="${item.lon}" data-display="${escapeHtml(item.display_name)}">${escapeHtml(item.display_name)}</div>`;
+						}).join('');
+						$list.html(items).show();
+					})
+					.catch(() => {
+						$list.empty().hide();
+					});
+			}, 400);
+		});
+
+		$list.on('click', '.mdr-addr-item', function () {
+			const lat = $(this).data('lat');
+			const lng = $(this).data('lng');
+			const display = $(this).data('display');
+			if (display) {
+				$input.val(display);
+			}
+			if (lat && lng) {
+				$('#lat').val(parseFloat(lat).toFixed(6));
+				$('#lng').val(parseFloat(lng).toFixed(6));
+			}
+			$list.empty().hide();
+		});
+	}
+
+	function initSelectAll() {
+		const masters = document.querySelectorAll('.mdr-select-all');
+		if (!masters.length) {
+			return;
+		}
+		masters.forEach((master) => {
+			const targetName = master.getAttribute('data-target');
+			const table = master.closest('table');
+			master.addEventListener('change', () => {
+				const scope = table || document;
+				let selector = 'input[type="checkbox"]';
+				if (targetName) {
+					selector = 'input[type="checkbox"][name="' + targetName + '"]';
+				}
+				scope.querySelectorAll(selector).forEach((cb) => {
+					cb.checked = master.checked;
+				});
 			});
 		});
 	}

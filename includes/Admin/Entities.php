@@ -30,6 +30,9 @@ class Entities {
 		if (isset($_GET['action'], $_GET['id'], $_GET['_wpnonce']) && $_GET['action'] === 'delete' && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'mdr_delete_entidad')) {
 			$this->delete_entity(absint($_GET['id']));
 		}
+		if (current_user_can('manage_options') && isset($_POST['mdr_entities_bulk_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_entities_bulk_nonce'])), 'mdr_entities_bulk_delete')) {
+			$this->bulk_delete();
+		}
 	}
 
 	private function save_entity(): void {
@@ -198,7 +201,10 @@ class Entities {
 							</tr>
 							<tr>
 								<th><label for="direccion_linea1"><?php esc_html_e('Dirección', 'mapa-de-recursos'); ?></label></th>
-								<td><input type="text" name="direccion_linea1" id="direccion_linea1" class="regular-text" value="<?php echo $editing ? esc_attr($editing->direccion_linea1) : ''; ?>"></td>
+								<td>
+									<input type="text" name="direccion_linea1" id="direccion_linea1" class="regular-text" value="<?php echo $editing ? esc_attr($editing->direccion_linea1) : ''; ?>" autocomplete="off">
+									<div id="mdr-addr-suggestions" class="mdr-addr-suggestions" aria-live="polite"></div>
+								</td>
 							</tr>
 							<tr>
 								<th><label for="cp"><?php esc_html_e('CP', 'mapa-de-recursos'); ?></label></th>
@@ -229,38 +235,44 @@ class Entities {
 				</div>
 				<div class="mdr-admin-col">
 					<h2><?php esc_html_e('Listado', 'mapa-de-recursos'); ?></h2>
-					<table class="widefat striped">
-						<thead>
-							<tr>
-								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Zona', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Lat', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Lng', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
-							</tr>
-						</thead>
-						<tbody>
-							<?php if (! empty($entities)) : ?>
-								<?php foreach ($entities as $ent) : ?>
-									<tr>
-										<td><?php echo esc_html((string) $ent->id); ?></td>
-										<td><?php echo esc_html($ent->nombre); ?></td>
-										<td><?php echo esc_html($ent->zona_nombre ?: ''); ?></td>
-										<td><?php echo esc_html($ent->lat); ?></td>
-										<td><?php echo esc_html($ent->lng); ?></td>
-										<td>
-											<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_entidades', 'action' => 'edit', 'id' => $ent->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
-											|
-											<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_entidades', 'action' => 'delete', 'id' => $ent->id], admin_url('admin.php')), 'mdr_delete_entidad')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta entidad y sus recursos?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
-										</td>
-									</tr>
-								<?php endforeach; ?>
-							<?php else : ?>
-								<tr><td colspan="6"><?php esc_html_e('Sin entidades todavía.', 'mapa-de-recursos'); ?></td></tr>
-							<?php endif; ?>
-						</tbody>
-					</table>
+					<form method="post">
+						<?php wp_nonce_field('mdr_entities_bulk_delete', 'mdr_entities_bulk_nonce'); ?>
+						<table class="widefat striped">
+							<thead>
+								<tr>
+									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_entity_ids[]"></th>
+									<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Zona', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Lat', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Lng', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php if (! empty($entities)) : ?>
+									<?php foreach ($entities as $ent) : ?>
+										<tr>
+											<td><input type="checkbox" name="mdr_entity_ids[]" value="<?php echo esc_attr((string) $ent->id); ?>"></td>
+											<td><?php echo esc_html((string) $ent->id); ?></td>
+											<td><?php echo esc_html($ent->nombre); ?></td>
+											<td><?php echo esc_html($ent->zona_nombre ?: ''); ?></td>
+											<td><?php echo esc_html($ent->lat); ?></td>
+											<td><?php echo esc_html($ent->lng); ?></td>
+											<td>
+												<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_entidades', 'action' => 'edit', 'id' => $ent->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+												|
+												<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_entidades', 'action' => 'delete', 'id' => $ent->id], admin_url('admin.php')), 'mdr_delete_entidad')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta entidad y sus recursos?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+											</td>
+										</tr>
+									<?php endforeach; ?>
+								<?php else : ?>
+									<tr><td colspan="7"><?php esc_html_e('Sin entidades todavía.', 'mapa-de-recursos'); ?></td></tr>
+								<?php endif; ?>
+							</tbody>
+						</table>
+						<?php submit_button(__('Eliminar seleccionadas', 'mapa-de-recursos'), 'delete'); ?>
+					</form>
 				</div>
 			</div>
 		</div>
@@ -296,7 +308,7 @@ class Entities {
 		return (bool) preg_match('/^[0-9+\-\s()]{6,}$/', $clean);
 	}
 
-	private function delete_entity(int $id): void {
+	private function delete_entity(int $id, bool $suppress_redirect = false): void {
 		global $wpdb;
 		$entities_table = "{$wpdb->prefix}mdr_entidades";
 		$recursos_table = "{$wpdb->prefix}mdr_recursos";
@@ -307,6 +319,25 @@ class Entities {
 		Cache::flush_all();
 		$this->logger->log('delete_entidad', 'entidad', ['id' => $id], 'entidad');
 
+		if (! $suppress_redirect && ! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_entidades', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
+	}
+
+	private function bulk_delete(): void {
+		if (! current_user_can('manage_options')) {
+			return;
+		}
+		if (empty($_POST['mdr_entities_bulk_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_entities_bulk_nonce'])), 'mdr_entities_bulk_delete')) {
+			return;
+		}
+		if (empty($_POST['mdr_entity_ids']) || ! is_array($_POST['mdr_entity_ids'])) {
+			return;
+		}
+		foreach ($_POST['mdr_entity_ids'] as $id) {
+			$this->delete_entity(absint($id), true);
+		}
 		if (! headers_sent()) {
 			wp_safe_redirect(add_query_arg(['page' => 'mdr_entidades', 'deleted' => 'true'], admin_url('admin.php')));
 			exit;

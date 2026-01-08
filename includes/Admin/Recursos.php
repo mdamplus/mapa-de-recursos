@@ -24,8 +24,14 @@ class Recursos {
 			return;
 		}
 
+		if (isset($_GET['action'], $_GET['id'], $_GET['_wpnonce']) && 'delete' === $_GET['action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'mdr_delete_recurso')) {
+			$this->delete_recurso(absint($_GET['id']));
+		}
 		if (isset($_POST['mdr_recurso_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_recurso_nonce'])), 'mdr_save_recurso')) {
 			$this->save_recurso();
+		}
+		if (current_user_can('manage_options') && isset($_POST['mdr_recursos_bulk_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_recursos_bulk_nonce'])), 'mdr_recursos_bulk_delete')) {
+			$this->bulk_delete();
 		}
 	}
 
@@ -278,32 +284,42 @@ class Recursos {
 				</div>
 				<div class="mdr-admin-col">
 					<h2><?php esc_html_e('Listado', 'mapa-de-recursos'); ?></h2>
-					<table class="widefat striped">
-						<thead>
-							<tr>
-								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Recurso', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Entidad', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Activo', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
-							</tr>
-						</thead>
-						<tbody>
-							<?php if (! empty($recursos)) : ?>
-								<?php foreach ($recursos as $rec) : ?>
-									<tr>
-										<td><?php echo esc_html((string) $rec->id); ?></td>
-										<td><?php echo esc_html($rec->recurso_programa); ?></td>
-										<td><?php echo esc_html($rec->entidad_nombre); ?></td>
-										<td><?php echo $rec->activo ? '✓' : '—'; ?></td>
-										<td><a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_recursos', 'action' => 'edit', 'id' => $rec->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a></td>
-									</tr>
-								<?php endforeach; ?>
-							<?php else : ?>
-								<tr><td colspan="5"><?php esc_html_e('Sin recursos todavía.', 'mapa-de-recursos'); ?></td></tr>
-							<?php endif; ?>
-						</tbody>
-					</table>
+					<form method="post">
+						<?php wp_nonce_field('mdr_recursos_bulk_delete', 'mdr_recursos_bulk_nonce'); ?>
+						<table class="widefat striped">
+							<thead>
+								<tr>
+									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_recurso_ids[]"></th>
+									<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Recurso', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Entidad', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Activo', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php if (! empty($recursos)) : ?>
+									<?php foreach ($recursos as $rec) : ?>
+										<tr>
+											<td><input type="checkbox" name="mdr_recurso_ids[]" value="<?php echo esc_attr((string) $rec->id); ?>"></td>
+											<td><?php echo esc_html((string) $rec->id); ?></td>
+											<td><?php echo esc_html($rec->recurso_programa); ?></td>
+											<td><?php echo esc_html($rec->entidad_nombre); ?></td>
+											<td><?php echo $rec->activo ? '✓' : '—'; ?></td>
+											<td>
+												<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_recursos', 'action' => 'edit', 'id' => $rec->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+												|
+												<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_recursos', 'action' => 'delete', 'id' => $rec->id], admin_url('admin.php')), 'mdr_delete_recurso')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar este recurso?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+											</td>
+										</tr>
+									<?php endforeach; ?>
+								<?php else : ?>
+									<tr><td colspan="6"><?php esc_html_e('Sin recursos todavía.', 'mapa-de-recursos'); ?></td></tr>
+								<?php endif; ?>
+							</tbody>
+						</table>
+						<button type="submit" class="button button-secondary"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
+					</form>
 				</div>
 			</div>
 		</div>
@@ -357,6 +373,40 @@ class Recursos {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_financiaciones";
 		return (array) $wpdb->get_results("SELECT id, nombre FROM {$table} ORDER BY nombre ASC");
+	}
+
+	private function bulk_delete(): void {
+		if (! current_user_can('manage_options')) {
+			return;
+		}
+		if (empty($_POST['mdr_recursos_bulk_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_recursos_bulk_nonce'])), 'mdr_recursos_bulk_delete')) {
+			return;
+		}
+		if (empty($_POST['mdr_recurso_ids']) || ! is_array($_POST['mdr_recurso_ids'])) {
+			return;
+		}
+		global $wpdb;
+		foreach ($_POST['mdr_recurso_ids'] as $id) {
+			$this->delete_recurso(absint($id), true);
+		}
+		Cache::flush_all();
+		if (! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_recursos', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
+	}
+
+	private function delete_recurso(int $id, bool $suppress_redirect = false): void {
+		global $wpdb;
+		$table = "{$wpdb->prefix}mdr_recursos";
+		$wpdb->delete($table, ['id' => $id], ['%d']);
+		Cache::flush_all();
+		$this->logger->log('delete_recurso', 'recurso', ['id' => $id], 'recurso');
+
+		if (! $suppress_redirect && ! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_recursos', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
 	}
 
 	private function decode_contactos(string $raw): array {

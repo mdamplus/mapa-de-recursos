@@ -306,7 +306,7 @@ class Admin {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_entidades";
 
-		$entities = $wpdb->get_results("SELECT * FROM {$table} WHERE ((lat IS NULL OR lng IS NULL) OR (lat = 0 OR lng = 0)) AND (direccion_linea1 <> '' OR ciudad <> '' OR provincia <> '' OR pais <> '' OR cp <> '') LIMIT 200");
+		$entities = $wpdb->get_results("SELECT * FROM {$table} WHERE ((lat IS NULL OR lng IS NULL) OR (lat = 0 OR lng = 0) OR (lat = 69.1665290 AND lng = 17.8786200)) AND (direccion_linea1 <> '' OR ciudad <> '' OR provincia <> '' OR pais <> '' OR cp <> '') LIMIT 200");
 		if (! $entities) {
 			echo '<div class="notice notice-info"><p>' . esc_html__('No hay entidades pendientes de geolocalizar.', 'mapa-de-recursos') . '</p></div>';
 			return;

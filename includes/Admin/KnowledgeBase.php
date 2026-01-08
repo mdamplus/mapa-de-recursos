@@ -139,7 +139,8 @@ Entidades:
 Recursos:
 1) entidad_nombre*; 2) ambito_nombre; 3) subcategoria_nombre; 4) recurso_programa*; 5) descripcion; 6) objetivo; 7) destinatarios; 8) periodo_inicio (YYYY-MM-DD); 9) periodo_fin (YYYY-MM-DD);
 10) entidad_gestora_nombre; 11) financiacion_nombre; 12) servicio_nombre; 13) activo (1/0);
-14+) contactos en grupos de 3 columnas: contacto_nombreN, contacto_emailN, contacto_telN
+14) entidad_id; 15) ambito_id; 16) subcategoria_id; 17) servicio_id; 18) financiacion_id; 19) entidad_gestora_id;
+20+) contactos en grupos de 3 columnas: contacto_nombreN, contacto_emailN, contacto_telN
 TXT;
 	}
 }

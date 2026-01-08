@@ -29,6 +29,9 @@ class Zonas {
 		if (isset($_GET['action'], $_GET['id'], $_GET['_wpnonce']) && $_GET['action'] === 'delete' && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'mdr_delete_zona')) {
 			$this->delete(absint($_GET['id']));
 		}
+		if (current_user_can('manage_options') && isset($_POST['mdr_zonas_bulk_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_zonas_bulk_nonce'])), 'mdr_zonas_bulk_delete')) {
+			$this->bulk_delete();
+		}
 	}
 
 	private function save(): void {
@@ -110,30 +113,36 @@ class Zonas {
 				</div>
 				<div class="mdr-admin-col">
 					<h2><?php esc_html_e('Listado', 'mapa-de-recursos'); ?></h2>
-					<table class="widefat striped">
-						<thead>
-							<tr>
-								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
-							</tr>
-						</thead>
-						<tbody>
-							<?php if ($list) : foreach ($list as $item) : ?>
+					<form method="post">
+						<?php wp_nonce_field('mdr_zonas_bulk_delete', 'mdr_zonas_bulk_nonce'); ?>
+						<table class="widefat striped">
+							<thead>
 								<tr>
-									<td><?php echo esc_html((string) $item->id); ?></td>
-									<td><?php echo esc_html($item->nombre); ?></td>
-									<td>
-										<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_zonas', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
-										|
-										<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_zonas', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_zona')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta zona?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
-									</td>
+									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_zona_ids[]"></th>
+									<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
+									<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
 								</tr>
-							<?php endforeach; else : ?>
-								<tr><td colspan="3"><?php esc_html_e('Sin zonas todavía.', 'mapa-de-recursos'); ?></td></tr>
-							<?php endif; ?>
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								<?php if ($list) : foreach ($list as $item) : ?>
+									<tr>
+										<td><input type="checkbox" name="mdr_zona_ids[]" value="<?php echo esc_attr((string) $item->id); ?>"></td>
+										<td><?php echo esc_html((string) $item->id); ?></td>
+										<td><?php echo esc_html($item->nombre); ?></td>
+										<td>
+											<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_zonas', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+											|
+											<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_zonas', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_zona')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta zona?', 'mapa-de-recursos'); ?>'); ?>"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+										</td>
+									</tr>
+								<?php endforeach; else : ?>
+									<tr><td colspan="4"><?php esc_html_e('Sin zonas todavía.', 'mapa-de-recursos'); ?></td></tr>
+								<?php endif; ?>
+							</tbody>
+						</table>
+						<?php submit_button(__('Eliminar seleccionadas', 'mapa-de-recursos'), 'delete'); ?>
+					</form>
 				</div>
 			</div>
 		</div>
@@ -152,13 +161,29 @@ class Zonas {
 		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
 	}
 
-	private function delete(int $id): void {
+	private function delete(int $id, bool $suppress_redirect = false): void {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_zonas";
 		$wpdb->delete($table, ['id' => $id], ['%d']);
 		Cache::flush_all();
 		$this->logger->log('delete_zona', 'zona', ['id' => $id], 'zona');
 
+		if (! $suppress_redirect && ! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_zonas', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
+	}
+
+	private function bulk_delete(): void {
+		if (! current_user_can('manage_options')) {
+			return;
+		}
+		if (empty($_POST['mdr_zona_ids']) || ! is_array($_POST['mdr_zona_ids'])) {
+			return;
+		}
+		foreach ($_POST['mdr_zona_ids'] as $id) {
+			$this->delete(absint($id), true);
+		}
 		if (! headers_sent()) {
 			wp_safe_redirect(add_query_arg(['page' => 'mdr_zonas', 'deleted' => 'true'], admin_url('admin.php')));
 			exit;

@@ -28,6 +28,9 @@ class Financiaciones {
 		if (isset($_GET['action'], $_GET['id'], $_GET['_wpnonce']) && $_GET['action'] === 'delete' && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'mdr_delete_financiacion')) {
 			$this->delete(absint($_GET['id']));
 		}
+		if (current_user_can('manage_options') && isset($_POST['mdr_financiaciones_bulk_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_financiaciones_bulk_nonce'])), 'mdr_financiaciones_bulk_delete')) {
+			$this->bulk_delete();
+		}
 	}
 
 	private function save(): void {
@@ -75,14 +78,14 @@ class Financiaciones {
 		}
 	}
 
-	private function delete(int $id): void {
+	private function delete(int $id, bool $suppress_redirect = false): void {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_financiaciones";
 		$wpdb->delete($table, ['id' => $id], ['%d']);
 		Cache::flush_all();
 		$this->logger->log('delete_financiacion', 'financiacion', ['id' => $id], 'financiacion');
 
-		if (! headers_sent()) {
+		if (! $suppress_redirect && ! headers_sent()) {
 			wp_safe_redirect(add_query_arg(['page' => 'mdr_financiaciones', 'deleted' => 'true'], admin_url('admin.php')));
 			exit;
 		}
@@ -101,6 +104,7 @@ class Financiaciones {
 		}
 
 		$list = $this->get_all();
+		$can_bulk = current_user_can('manage_options');
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e('Financiación', 'mapa-de-recursos'); ?></h1>
@@ -146,9 +150,16 @@ class Financiaciones {
 				</div>
 				<div class="mdr-admin-col">
 					<h2><?php esc_html_e('Listado', 'mapa-de-recursos'); ?></h2>
+				<form method="post">
+					<?php if ($can_bulk) : ?>
+						<?php wp_nonce_field('mdr_financiaciones_bulk_delete', 'mdr_financiaciones_bulk_nonce'); ?>
+					<?php endif; ?>
 					<table class="widefat striped">
 						<thead>
 							<tr>
+								<?php if ($can_bulk) : ?>
+									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_financiacion_ids[]"></th>
+								<?php endif; ?>
 								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
 								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
 								<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
@@ -157,6 +168,9 @@ class Financiaciones {
 						<tbody>
 							<?php if ($list) : foreach ($list as $item) : ?>
 								<tr>
+									<?php if ($can_bulk) : ?>
+										<td><input type="checkbox" name="mdr_financiacion_ids[]" value="<?php echo esc_attr((string) $item->id); ?>"></td>
+									<?php endif; ?>
 									<td><?php echo esc_html((string) $item->id); ?></td>
 									<td><?php echo esc_html($item->nombre); ?></td>
 									<td>
@@ -166,10 +180,14 @@ class Financiaciones {
 									</td>
 								</tr>
 							<?php endforeach; else : ?>
-								<tr><td colspan="3"><?php esc_html_e('Sin financiadores todavía.', 'mapa-de-recursos'); ?></td></tr>
+								<tr><td colspan="<?php echo $can_bulk ? 4 : 3; ?>"><?php esc_html_e('Sin financiadores todavía.', 'mapa-de-recursos'); ?></td></tr>
 							<?php endif; ?>
 						</tbody>
 					</table>
+					<?php if ($can_bulk) : ?>
+						<button type="submit" class="button button-secondary"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
+					<?php endif; ?>
+				</form>
 				</div>
 			</div>
 		</div>
@@ -186,5 +204,21 @@ class Financiaciones {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_financiaciones";
 		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
+	}
+
+	private function bulk_delete(): void {
+		if (! current_user_can('manage_options')) {
+			return;
+		}
+		if (empty($_POST['mdr_financiacion_ids']) || ! is_array($_POST['mdr_financiacion_ids'])) {
+			return;
+		}
+		foreach ($_POST['mdr_financiacion_ids'] as $id) {
+			$this->delete(absint($id), true);
+		}
+		if (! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_financiaciones', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
 	}
 }
