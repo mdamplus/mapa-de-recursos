@@ -124,7 +124,7 @@ class Ambitos {
 						<table class="form-table" role="presentation">
 							<tr>
 								<th><label for="quick_ambito"><?php esc_html_e('Ámbito', 'mapa-de-recursos'); ?></label></th>
-								<td>
+								<td class="mdr-actions">
 									<select name="quick_ambito" id="quick_ambito" required>
 										<option value=""><?php esc_html_e('Seleccionar', 'mapa-de-recursos'); ?></option>
 										<?php foreach ($ambitos as $amb) : ?>
@@ -165,7 +165,7 @@ class Ambitos {
 									<?php endif; ?>
 									<td><?php echo esc_html((string) $item->id); ?></td>
 									<td><?php echo esc_html($item->nombre); ?></td>
-									<td>
+									<td class="mdr-actions">
 										<?php
 										if (! empty($item->subcategorias)) {
 											echo esc_html(implode(', ', $item->subcategorias));
@@ -174,10 +174,9 @@ class Ambitos {
 										}
 										?>
 									</td>
-									<td>
-										<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_ambitos', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
-										|
-										<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_ambitos', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_ambito')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar este ámbito?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+									<td class="mdr-actions">
+										<a class="button button-primary button-small" href="<?php echo esc_url(add_query_arg(['page' => 'mdr_ambitos', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+										<a class="button button-secondary button-small is-danger" href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_ambitos', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_ambito')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar este ámbito?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
 									</td>
 								</tr>
 							<?php endforeach; else : ?>
@@ -186,7 +185,7 @@ class Ambitos {
 						</tbody>
 					</table>
 					<?php if ($can_bulk) : ?>
-						<button type="submit" class="button button-secondary"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
+						<button type="submit" class="button button-secondary is-danger"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
 					<?php endif; ?>
 				</form>
 				</div>

@@ -93,6 +93,15 @@ class Admin {
 
 		add_submenu_page(
 			'mdr_dashboard',
+			__('Subcategorías', 'mapa-de-recursos'),
+			__('Subcategorías', 'mapa-de-recursos'),
+			'mdr_manage',
+			'mdr_subcategorias',
+			[$this, 'render_subcategorias']
+		);
+
+		add_submenu_page(
+			'mdr_dashboard',
 			__('Servicios / Iconos', 'mapa-de-recursos'),
 			__('Servicios / Iconos', 'mapa-de-recursos'),
 			'mdr_manage',
@@ -181,6 +190,7 @@ class Admin {
 					'lng' => isset($_POST['fallback_lng']) ? floatval(wp_unslash($_POST['fallback_lng'])) : -4.4214,
 				],
 				'default_zona'      => isset($_POST['default_zona']) ? absint($_POST['default_zona']) : '',
+				'fa_kit'            => isset($_POST['fa_kit']) ? sanitize_text_field(wp_unslash($_POST['fa_kit'])) : 'f2eb5a66e3',
 			];
 			update_option('mapa_de_recursos_settings', $settings);
 			$this->logger->log('update_settings', 'settings', ['provider' => $settings['map_provider']], 'plugin');
@@ -232,6 +242,13 @@ class Admin {
 						<th scope="row"><?php esc_html_e('Zona por defecto', 'mapa-de-recursos'); ?></th>
 						<td>
 							<input type="number" name="default_zona" value="<?php echo isset($settings['default_zona']) ? esc_attr((string) $settings['default_zona']) : ''; ?>" />
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Font Awesome Kit ID', 'mapa-de-recursos'); ?></th>
+						<td>
+							<input type="text" name="fa_kit" value="<?php echo isset($settings['fa_kit']) ? esc_attr((string) $settings['fa_kit']) : 'f2eb5a66e3'; ?>" class="regular-text" />
+							<p class="description"><?php esc_html_e('Se cargará desde kit.fontawesome.com/{kit}.js (clásico solid/regular/brands).', 'mapa-de-recursos'); ?></p>
 						</td>
 					</tr>
 				</table>

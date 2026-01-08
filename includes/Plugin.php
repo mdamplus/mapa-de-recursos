@@ -92,6 +92,26 @@ class Plugin {
 	}
 
 	public function enqueue_frontend_assets(): void {
+		$settings = $this->get_settings();
+		$fa_kit = ! empty($settings['fa_kit']) ? sanitize_text_field($settings['fa_kit']) : 'f2eb5a66e3';
+		if ($fa_kit) {
+			wp_enqueue_script(
+				'mdr-fa-kit',
+				'https://kit.fontawesome.com/' . rawurlencode($fa_kit) . '.js',
+				[],
+				null,
+				true
+			);
+			wp_script_add_data('mdr-fa-kit', 'crossorigin', 'anonymous');
+			// Fallback CSS por si el kit no carga.
+			wp_enqueue_style(
+				'mdr-fa-fallback',
+				'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
+				[],
+				'6.5.1'
+			);
+		}
+
 		wp_register_style(
 			'mdr-leaflet',
 			'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
@@ -151,8 +171,6 @@ class Plugin {
 		wp_enqueue_style('mdr-frontend');
 		wp_enqueue_script('mdr-frontend');
 
-		$settings = $this->get_settings();
-
 		wp_localize_script(
 			'mdr-frontend',
 			'mdrData',
@@ -179,12 +197,54 @@ class Plugin {
 			return;
 		}
 
+		$settings = $this->get_settings();
+		$fa_kit = ! empty($settings['fa_kit']) ? sanitize_text_field($settings['fa_kit']) : 'f2eb5a66e3';
+		if ($fa_kit) {
+			wp_enqueue_script(
+				'mdr-fa-kit',
+				'https://kit.fontawesome.com/' . rawurlencode($fa_kit) . '.js',
+				[],
+				null,
+				true
+			);
+			wp_script_add_data('mdr-fa-kit', 'crossorigin', 'anonymous');
+			wp_enqueue_style(
+				'mdr-fa-fallback',
+				'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
+				[],
+				'6.5.1'
+			);
+		}
+
 		wp_enqueue_media();
+
+		$admin_js_path  = MAPA_DE_RECURSOS_PATH . 'assets/js/admin.js';
+		$admin_css_path = MAPA_DE_RECURSOS_PATH . 'assets/css/admin.css';
+		$asset_version  = MAPA_DE_RECURSOS_VERSION;
+		if (file_exists($admin_js_path)) {
+			$asset_version .= '.' . filemtime($admin_js_path);
+		}
+
+		// Leaflet para mapa en entidades (lo cargamos en todas las pantallas del plugin para evitar fallos por hook).
+		wp_enqueue_style(
+			'mdr-leaflet-admin',
+			'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+			[],
+			'1.9.4'
+		);
+		wp_enqueue_script(
+			'mdr-leaflet-admin',
+			'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+			[],
+			'1.9.4',
+			true
+		);
+
 		wp_enqueue_style(
 			'mdr-admin',
 			MAPA_DE_RECURSOS_URL . 'assets/css/admin.css',
 			[],
-			MAPA_DE_RECURSOS_VERSION
+			file_exists($admin_css_path) ? $asset_version : MAPA_DE_RECURSOS_VERSION
 		);
 		wp_enqueue_style(
 			'mdr-bulma',
@@ -192,11 +252,16 @@ class Plugin {
 			[],
 			'0.9.4'
 		);
+		$admin_deps = ['jquery'];
+		if (wp_script_is('mdr-leaflet-admin', 'registered') || wp_script_is('mdr-leaflet-admin', 'enqueued')) {
+			$admin_deps[] = 'mdr-leaflet-admin';
+		}
+
 		wp_enqueue_script(
 			'mdr-admin',
 			MAPA_DE_RECURSOS_URL . 'assets/js/admin.js',
-			['jquery'],
-			MAPA_DE_RECURSOS_VERSION,
+			$admin_deps,
+			$asset_version,
 			true
 		);
 
@@ -210,6 +275,11 @@ class Plugin {
 					'geocode_not_found' => __('No se encontraron coordenadas para esa dirección.', 'mapa-de-recursos'),
 					'geocode_need_address' => __('Introduce una dirección para geocodificar.', 'mapa-de-recursos'),
 				],
+				'fallbackCenter' => [
+					'lat' => (float) ($settings['fallback_center']['lat'] ?? 36.7213),
+					'lng' => (float) ($settings['fallback_center']['lng'] ?? -4.4214),
+				],
+				'faJson' => MAPA_DE_RECURSOS_URL . 'assets/icons/fa-free.json',
 			]
 		);
 	}
@@ -282,6 +352,7 @@ class Plugin {
 				'lng' => -4.4214,
 			],
 			'default_zona'      => '',
+			'fa_kit'            => 'f2eb5a66e3',
 		];
 
 		$saved = get_option('mapa_de_recursos_settings', []);

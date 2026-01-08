@@ -134,6 +134,7 @@ class Installer {
 				slug varchar(190) NOT NULL,
 				icono_media_id bigint(20) unsigned DEFAULT NULL,
 				icono_svg longtext DEFAULT NULL,
+				icono_clase varchar(190) DEFAULT NULL,
 				marker_style longtext DEFAULT NULL,
 				created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

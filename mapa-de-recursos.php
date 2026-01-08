@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: Mapa de recursos
+ * Plugin Name: Mapa de recursos 🚀
  * Plugin URI: https://martinarnedo.com/mapa-de-recursos
- * Description: Geolocaliza al usuario y muestra recursos cercanos en un mapa con filtros y clustering.
+ * Description: Geolocaliza al usuario y muestra recursos cercanos en un mapa con filtros y clustering <a herf="#">.</a>..
  * Version: 2026.1
  * Author: Martín D. Arnedo Mahr
  * Author URI:  https://martinarnedo.com/?ztrack=mapa-de-recursos

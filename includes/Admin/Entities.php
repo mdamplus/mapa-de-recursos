@@ -229,6 +229,13 @@ class Entities {
 									<small><?php esc_html_e('Usa la dirección, CP, ciudad, provincia y país para buscar.', 'mapa-de-recursos'); ?></small>
 								</td>
 							</tr>
+							<tr>
+								<th><label><?php esc_html_e('Mapa', 'mapa-de-recursos'); ?></label></th>
+								<td>
+									<div id="mdr-entity-map" style="height:260px;"></div>
+									<small><?php esc_html_e('Arrastra el marcador para ajustar latitud y longitud.', 'mapa-de-recursos'); ?></small>
+								</td>
+							</tr>
 						</table>
 						<?php submit_button($editing ? __('Actualizar', 'mapa-de-recursos') : __('Crear', 'mapa-de-recursos')); ?>
 					</form>
@@ -260,9 +267,8 @@ class Entities {
 											<td><?php echo esc_html($ent->lat); ?></td>
 											<td><?php echo esc_html($ent->lng); ?></td>
 											<td>
-												<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_entidades', 'action' => 'edit', 'id' => $ent->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
-												|
-												<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_entidades', 'action' => 'delete', 'id' => $ent->id], admin_url('admin.php')), 'mdr_delete_entidad')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta entidad y sus recursos?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+												<a class="button button-primary button-small" href="<?php echo esc_url(add_query_arg(['page' => 'mdr_entidades', 'action' => 'edit', 'id' => $ent->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+												<a class="button button-secondary button-small is-danger" href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_entidades', 'action' => 'delete', 'id' => $ent->id], admin_url('admin.php')), 'mdr_delete_entidad')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta entidad y sus recursos?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
 											</td>
 										</tr>
 									<?php endforeach; ?>

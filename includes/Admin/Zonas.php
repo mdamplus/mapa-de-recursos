@@ -131,9 +131,8 @@ class Zonas {
 										<td><?php echo esc_html((string) $item->id); ?></td>
 										<td><?php echo esc_html($item->nombre); ?></td>
 										<td>
-											<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_zonas', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
-											|
-											<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_zonas', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_zona')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta zona?', 'mapa-de-recursos'); ?>'); ?>"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+											<a class="button button-primary button-small" href="<?php echo esc_url(add_query_arg(['page' => 'mdr_zonas', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+											<a class="button button-secondary button-small is-danger" href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_zonas', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_zona')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar esta zona?', 'mapa-de-recursos'); ?>'); ?>"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
 										</td>
 									</tr>
 								<?php endforeach; else : ?>

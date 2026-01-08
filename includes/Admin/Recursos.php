@@ -307,9 +307,8 @@ class Recursos {
 											<td><?php echo esc_html($rec->entidad_nombre); ?></td>
 											<td><?php echo $rec->activo ? '✓' : '—'; ?></td>
 											<td>
-												<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_recursos', 'action' => 'edit', 'id' => $rec->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
-												|
-												<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_recursos', 'action' => 'delete', 'id' => $rec->id], admin_url('admin.php')), 'mdr_delete_recurso')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar este recurso?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+												<a class="button button-primary button-small" href="<?php echo esc_url(add_query_arg(['page' => 'mdr_recursos', 'action' => 'edit', 'id' => $rec->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+												<a class="button button-secondary button-small is-danger" href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_recursos', 'action' => 'delete', 'id' => $rec->id], admin_url('admin.php')), 'mdr_delete_recurso')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar este recurso?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
 											</td>
 										</tr>
 									<?php endforeach; ?>
@@ -318,7 +317,7 @@ class Recursos {
 								<?php endif; ?>
 							</tbody>
 						</table>
-						<button type="submit" class="button button-secondary"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
+						<button type="submit" class="button button-secondary is-danger"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
 					</form>
 				</div>
 			</div>
