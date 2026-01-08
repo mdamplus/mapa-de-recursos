@@ -11,6 +11,15 @@
 		initSelectAll();
 	});
 
+	function escapeHtml(str) {
+		return String(str || '')
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#039;');
+	}
+
 	function initMediaUploader() {
 		const $btn = $('#mdr-upload-logo');
 		if (!$btn.length || typeof wp === 'undefined' || !wp.media) {
@@ -231,22 +240,20 @@
 	}
 
 	function initSelectAll() {
-		const masters = document.querySelectorAll('.mdr-select-all');
-		if (!masters.length) {
-			return;
-		}
-		masters.forEach((master) => {
+		document.addEventListener('change', function (e) {
+			const master = e.target;
+			if (!master.classList || !master.classList.contains('mdr-select-all')) {
+				return;
+			}
 			const targetName = master.getAttribute('data-target');
-			const table = master.closest('table');
-			master.addEventListener('change', () => {
-				const scope = table || document;
-				let selector = 'input[type="checkbox"]';
-				if (targetName) {
-					selector = 'input[type="checkbox"][name="' + targetName + '"]';
-				}
-				scope.querySelectorAll(selector).forEach((cb) => {
-					cb.checked = master.checked;
-				});
+			const form = master.closest('form');
+			const scope = form || master.closest('table') || document;
+			let selector = 'input[type="checkbox"]';
+			if (targetName) {
+				selector = 'input[type="checkbox"][name="' + targetName + '"]';
+			}
+			scope.querySelectorAll(selector).forEach((cb) => {
+				cb.checked = master.checked;
 			});
 		});
 	}
