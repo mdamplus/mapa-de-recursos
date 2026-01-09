@@ -27,6 +27,12 @@ class Servicios {
 		if (isset($_POST['mdr_servicio_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_servicio_nonce'])), 'mdr_save_servicio')) {
 			$this->save_servicio();
 		}
+		if (isset($_GET['action'], $_GET['id'], $_GET['_wpnonce']) && 'delete' === $_GET['action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'mdr_delete_servicio')) {
+			$this->delete_servicio(absint($_GET['id']));
+		}
+		if (current_user_can('manage_options') && isset($_POST['mdr_servicios_bulk_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mdr_servicios_bulk_nonce'])), 'mdr_servicios_bulk_delete')) {
+			$this->bulk_delete();
+		}
 	}
 
 	private function save_servicio(): void {
@@ -96,7 +102,8 @@ class Servicios {
 			$editing = $this->get_servicio(absint($_GET['id']));
 		}
 
-		$servicios = $this->get_servicios();
+		$order_param = isset($_GET['order']) ? sanitize_text_field(wp_unslash($_GET['order'])) : 'id_desc';
+		$servicios = $this->get_servicios($order_param);
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e('Servicios / Iconos', 'mapa-de-recursos'); ?></h1>
@@ -168,30 +175,45 @@ class Servicios {
 				</div>
 				<div class="mdr-admin-col">
 					<h2><?php esc_html_e('Listado', 'mapa-de-recursos'); ?></h2>
-					<table class="widefat striped">
-						<thead>
-							<tr>
-								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
-							</tr>
-						</thead>
-						<tbody>
-							<?php if (! empty($servicios)) : ?>
-								<?php foreach ($servicios as $serv) : ?>
-									<tr>
-										<td><?php echo esc_html((string) $serv->id); ?></td>
-										<td><?php echo esc_html($serv->nombre); ?></td>
-										<td class="mdr-actions">
-											<a class="button button-primary button-small" href="<?php echo esc_url(add_query_arg(['page' => 'mdr_servicios', 'action' => 'edit', 'id' => $serv->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
-										</td>
-									</tr>
-								<?php endforeach; ?>
-							<?php else : ?>
-								<tr><td colspan="3"><?php esc_html_e('Sin servicios todavía.', 'mapa-de-recursos'); ?></td></tr>
-							<?php endif; ?>
-						</tbody>
-					</table>
+					<form method="post">
+						<?php wp_nonce_field('mdr_servicios_bulk_delete', 'mdr_servicios_bulk_nonce'); ?>
+						<table class="widefat striped">
+							<thead>
+								<tr>
+									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_servicio_ids[]"></th>
+									<th>
+										<?php esc_html_e('ID', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_desc'])); ?>">↓</a>
+									</th>
+									<th>
+										<?php esc_html_e('Nombre', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_desc'])); ?>">↓</a>
+									</th>
+									<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php if (! empty($servicios)) : ?>
+									<?php foreach ($servicios as $serv) : ?>
+										<tr>
+											<td><input type="checkbox" name="mdr_servicio_ids[]" value="<?php echo esc_attr((string) $serv->id); ?>"></td>
+											<td><?php echo esc_html((string) $serv->id); ?></td>
+											<td><?php echo esc_html($serv->nombre); ?></td>
+											<td class="mdr-actions">
+												<a class="button button-primary button-small" href="<?php echo esc_url(add_query_arg(['page' => 'mdr_servicios', 'action' => 'edit', 'id' => $serv->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+												<a class="button button-secondary button-small is-danger" href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_servicios', 'action' => 'delete', 'id' => $serv->id], admin_url('admin.php')), 'mdr_delete_servicio')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar este servicio?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+											</td>
+										</tr>
+									<?php endforeach; ?>
+								<?php else : ?>
+									<tr><td colspan="4"><?php esc_html_e('Sin servicios todavía.', 'mapa-de-recursos'); ?></td></tr>
+								<?php endif; ?>
+							</tbody>
+						</table>
+						<button type="submit" class="button button-secondary is-danger"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
+					</form>
 				</div>
 			</div>
 		</div>
@@ -204,9 +226,46 @@ class Servicios {
 		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
 	}
 
-	private function get_servicios(): array {
+	private function get_servicios(string $order_param = 'id_desc'): array {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_servicios";
-		return (array) $wpdb->get_results("SELECT * FROM {$table} ORDER BY nombre ASC");
+		$order = 'id DESC';
+		if ($order_param === 'id_asc') {
+			$order = 'id ASC';
+		} elseif ($order_param === 'name_asc') {
+			$order = 'nombre ASC';
+		} elseif ($order_param === 'name_desc') {
+			$order = 'nombre DESC';
+		}
+		return (array) $wpdb->get_results("SELECT * FROM {$table} ORDER BY {$order}");
+	}
+
+	private function delete_servicio(int $id, bool $suppress_redirect = false): void {
+		global $wpdb;
+		$table = "{$wpdb->prefix}mdr_servicios";
+		$wpdb->delete($table, ['id' => $id], ['%d']);
+		Cache::flush_all();
+		$this->logger->log('delete_servicio', 'servicio', ['id' => $id], 'servicio');
+
+		if (! $suppress_redirect && ! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_servicios', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
+	}
+
+	private function bulk_delete(): void {
+		if (! current_user_can('manage_options')) {
+			return;
+		}
+		if (empty($_POST['mdr_servicio_ids']) || ! is_array($_POST['mdr_servicio_ids'])) {
+			return;
+		}
+		foreach ($_POST['mdr_servicio_ids'] as $id) {
+			$this->delete_servicio(absint($id), true);
+		}
+		if (! headers_sent()) {
+			wp_safe_redirect(add_query_arg(['page' => 'mdr_servicios', 'deleted' => 'true'], admin_url('admin.php')));
+			exit;
+		}
 	}
 }

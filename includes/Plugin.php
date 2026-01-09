@@ -49,6 +49,7 @@ class Plugin {
 		add_action('plugins_loaded', [$this, 'init_updater']);
 		add_action('plugins_loaded', [$this, 'register_logger_hooks']);
 		add_action('plugins_loaded', [$this, 'ensure_caps_runtime']);
+		add_action('plugins_loaded', [Installer::class, 'maybe_upgrade']);
 	}
 
 	public function load_textdomain(): void {

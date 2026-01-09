@@ -132,7 +132,8 @@ class Entities {
 		}
 
 		$zonas = $this->get_zonas();
-		$entities = $this->get_entities();
+		$order_param = isset($_GET['order']) ? sanitize_text_field(wp_unslash($_GET['order'])) : 'id_desc';
+		$entities = $this->get_entities($order_param);
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e('Entidades', 'mapa-de-recursos'); ?></h1>
@@ -248,9 +249,21 @@ class Entities {
 							<thead>
 								<tr>
 									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_entity_ids[]"></th>
-									<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
-									<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
-									<th><?php esc_html_e('Zona', 'mapa-de-recursos'); ?></th>
+									<th>
+										<?php esc_html_e('ID', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_desc'])); ?>">↓</a>
+									</th>
+									<th>
+										<?php esc_html_e('Nombre', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_desc'])); ?>">↓</a>
+									</th>
+									<th>
+										<?php esc_html_e('Zona', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'zona_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'zona_desc'])); ?>">↓</a>
+									</th>
 									<th><?php esc_html_e('Lat', 'mapa-de-recursos'); ?></th>
 									<th><?php esc_html_e('Lng', 'mapa-de-recursos'); ?></th>
 									<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
@@ -291,15 +304,30 @@ class Entities {
 		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
 	}
 
-	private function get_entities(): array {
+	private function get_entities(string $order_param = 'id_desc'): array {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_entidades";
 		$zonas = "{$wpdb->prefix}mdr_zonas";
+		$order = 'e.id DESC';
+		if ($order_param === 'id_asc') {
+			$order = 'e.id ASC';
+		} elseif ($order_param === 'name_asc') {
+			$order = 'e.nombre ASC';
+		} elseif ($order_param === 'name_desc') {
+			$order = 'e.nombre DESC';
+		} elseif ($order_param === 'zona_asc') {
+			$order = 'z.nombre ASC';
+		} elseif ($order_param === 'zona_desc') {
+			$order = 'z.nombre DESC';
+		}
 		return (array) $wpdb->get_results(
-			"SELECT e.*, z.nombre as zona_nombre FROM {$table} e
-			LEFT JOIN {$zonas} z ON z.id = e.zona_id
-			ORDER BY e.created_at DESC
-			LIMIT 200"
+			$wpdb->prepare(
+				"SELECT e.*, z.nombre as zona_nombre FROM {$table} e
+				LEFT JOIN {$zonas} z ON z.id = e.zona_id
+				ORDER BY {$order}
+				LIMIT %d",
+				200
+			)
 		);
 	}
 

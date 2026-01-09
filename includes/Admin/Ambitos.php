@@ -93,7 +93,8 @@ class Ambitos {
 			$editing = $this->get(absint($_GET['id']));
 		}
 
-		$list = $this->get_all_with_subcats();
+		$order_param = isset($_GET['order']) ? sanitize_text_field(wp_unslash($_GET['order'])) : 'id_desc';
+		$list = $this->get_all_with_subcats($order_param);
 		$ambitos = $this->get_all();
 		$can_bulk = current_user_can('manage_options');
 		?>
@@ -151,8 +152,16 @@ class Ambitos {
 								<?php if ($can_bulk) : ?>
 									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_ambito_ids[]"></th>
 								<?php endif; ?>
-								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
+									<th>
+										<?php esc_html_e('ID', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_desc'])); ?>">↓</a>
+									</th>
+									<th>
+										<?php esc_html_e('Nombre', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_desc'])); ?>">↓</a>
+									</th>
 								<th><?php esc_html_e('Subcategorías', 'mapa-de-recursos'); ?></th>
 								<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
 							</tr>
@@ -200,11 +209,19 @@ class Ambitos {
 		return (array) $wpdb->get_results("SELECT * FROM {$table} ORDER BY nombre ASC");
 	}
 
-	private function get_all_with_subcats(): array {
+	private function get_all_with_subcats(string $order_param = 'id_desc'): array {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_ambitos";
 		$sub   = "{$wpdb->prefix}mdr_subcategorias";
-		$rows = (array) $wpdb->get_results("SELECT * FROM {$table} ORDER BY nombre ASC");
+		$order = 'id DESC';
+		if ($order_param === 'id_asc') {
+			$order = 'id ASC';
+		} elseif ($order_param === 'name_asc') {
+			$order = 'nombre ASC';
+		} elseif ($order_param === 'name_desc') {
+			$order = 'nombre DESC';
+		}
+		$rows = (array) $wpdb->get_results($wpdb->prepare("SELECT * FROM {$table} ORDER BY {$order} LIMIT %d", 200));
 		$subs = (array) $wpdb->get_results("SELECT ambito_id, nombre FROM {$sub} ORDER BY nombre ASC");
 		$grouped = [];
 		foreach ($subs as $s) {

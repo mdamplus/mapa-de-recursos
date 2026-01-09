@@ -89,7 +89,8 @@ class Zonas {
 			$editing = $this->get(absint($_GET['id']));
 		}
 
-		$list = $this->get_all();
+		$order_param = isset($_GET['order']) ? sanitize_text_field(wp_unslash($_GET['order'])) : 'id_desc';
+		$list = $this->get_all($order_param);
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e('Zonas', 'mapa-de-recursos'); ?></h1>
@@ -119,8 +120,16 @@ class Zonas {
 							<thead>
 								<tr>
 									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_zona_ids[]"></th>
-									<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
-									<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
+									<th>
+										<?php esc_html_e('ID', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_desc'])); ?>">↓</a>
+									</th>
+									<th>
+										<?php esc_html_e('Nombre', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_desc'])); ?>">↓</a>
+									</th>
 									<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
 								</tr>
 							</thead>
@@ -148,10 +157,18 @@ class Zonas {
 		<?php
 	}
 
-	private function get_all(): array {
+	private function get_all(string $order_param = 'id_desc'): array {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_zonas";
-		return (array) $wpdb->get_results("SELECT * FROM {$table} ORDER BY nombre ASC");
+		$order = 'id DESC';
+		if ($order_param === 'id_asc') {
+			$order = 'id ASC';
+		} elseif ($order_param === 'name_asc') {
+			$order = 'nombre ASC';
+		} elseif ($order_param === 'name_desc') {
+			$order = 'nombre DESC';
+		}
+		return (array) $wpdb->get_results("SELECT * FROM {$table} ORDER BY {$order}");
 	}
 
 	private function get(int $id) {

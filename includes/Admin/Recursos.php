@@ -127,7 +127,8 @@ class Recursos {
 		$servicios = $this->get_servicios();
 		$gestoras = $this->get_entidades();
 		$financiaciones = $this->get_financiaciones();
-		$recursos = $this->get_recursos();
+		$order_param = isset($_GET['order']) ? sanitize_text_field(wp_unslash($_GET['order'])) : 'id_desc';
+		$recursos = $this->get_recursos($order_param);
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e('Recursos', 'mapa-de-recursos'); ?></h1>
@@ -290,10 +291,26 @@ class Recursos {
 							<thead>
 								<tr>
 									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_recurso_ids[]"></th>
-									<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
-									<th><?php esc_html_e('Recurso', 'mapa-de-recursos'); ?></th>
-									<th><?php esc_html_e('Entidad', 'mapa-de-recursos'); ?></th>
-									<th><?php esc_html_e('Activo', 'mapa-de-recursos'); ?></th>
+									<th>
+										<?php esc_html_e('ID', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'id_desc'])); ?>">↓</a>
+									</th>
+									<th>
+										<?php esc_html_e('Recurso', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'name_desc'])); ?>">↓</a>
+									</th>
+									<th>
+										<?php esc_html_e('Entidad', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'entidad_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'entidad_desc'])); ?>">↓</a>
+									</th>
+									<th>
+										<?php esc_html_e('Activo', 'mapa-de-recursos'); ?>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'activo_asc'])); ?>">↑</a>
+										<a href="<?php echo esc_url(add_query_arg(['order' => 'activo_desc'])); ?>">↓</a>
+									</th>
 									<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
 								</tr>
 							</thead>
@@ -331,16 +348,35 @@ class Recursos {
 		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
 	}
 
-	private function get_recursos(): array {
+	private function get_recursos(string $order_param = 'id_desc'): array {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_recursos";
 		$ent   = "{$wpdb->prefix}mdr_entidades";
+		$order = 'r.id DESC';
+		if ($order_param === 'id_asc') {
+			$order = 'r.id ASC';
+		} elseif ($order_param === 'name_asc') {
+			$order = 'r.recurso_programa ASC';
+		} elseif ($order_param === 'name_desc') {
+			$order = 'r.recurso_programa DESC';
+		} elseif ($order_param === 'entidad_asc') {
+			$order = 'e.nombre ASC';
+		} elseif ($order_param === 'entidad_desc') {
+			$order = 'e.nombre DESC';
+		} elseif ($order_param === 'activo_asc') {
+			$order = 'r.activo ASC';
+		} elseif ($order_param === 'activo_desc') {
+			$order = 'r.activo DESC';
+		}
 		return (array) $wpdb->get_results(
-			"SELECT r.*, e.nombre as entidad_nombre
-			FROM {$table} r
-			LEFT JOIN {$ent} e ON e.id = r.entidad_id
-			ORDER BY r.updated_at DESC
-			LIMIT 200"
+			$wpdb->prepare(
+				"SELECT r.*, e.nombre as entidad_nombre
+				FROM {$table} r
+				LEFT JOIN {$ent} e ON e.id = r.entidad_id
+				ORDER BY {$order}
+				LIMIT %d",
+				200
+			)
 		);
 	}
 

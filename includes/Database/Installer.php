@@ -19,8 +19,22 @@ class Installer {
 	public function install(): void {
 		$this->create_tables();
 		$this->seed_zones();
+		$this->seed_services();
 		self::ensure_caps();
 
+		update_option(self::DB_VERSION_OPTION, MAPA_DE_RECURSOS_VERSION);
+	}
+
+	public static function maybe_upgrade(): void {
+		$current = get_option(self::DB_VERSION_OPTION);
+		if ($current === MAPA_DE_RECURSOS_VERSION) {
+			return;
+		}
+		$installer = new self();
+		$installer->create_tables();
+		$installer->seed_zones();
+		$installer->seed_services();
+		self::ensure_caps();
 		update_option(self::DB_VERSION_OPTION, MAPA_DE_RECURSOS_VERSION);
 	}
 
@@ -237,6 +251,59 @@ class Installer {
 					$role->add_cap($cap, $grant);
 				}
 			}
+		}
+	}
+
+	/**
+	 * Seed default services/icons if they do not exist.
+	 */
+	private function seed_services(): void {
+		global $wpdb;
+		$table = "{$wpdb->prefix}mdr_servicios";
+		$now   = current_time('mysql');
+
+		$items = [
+			['Empleo y Desarrollo', 'fa-solid fa-briefcase'],
+			['Formación reglada', 'fa-solid fa-graduation-cap'],
+			['Formación no reglada', 'fa-solid fa-book-open'],
+			['Orientación e Intermediación', 'fa-solid fa-compass'],
+			['Apoyo al Autoempleo y Tejido Empresarial', 'fa-solid fa-handshake'],
+			['Colectivos Específicos (Diversidad funcional)', 'fa-solid fa-wheelchair'],
+			['Colectivos Específicos (Jóvenes)', 'fa-solid fa-child-reaching'],
+			['Colectivos Específicos (Mujer)', 'fa-solid fa-person-dress'],
+			['Colectivos Específicos (Riesgo de exclusión)', 'fa-solid fa-people-arrows'],
+			['Inclusión Socio-Familiar', 'fa-solid fa-people-roof'],
+			['Infancia y Juventud', 'fa-solid fa-child-reaching'],
+			['Familias', 'fa-solid fa-people-roof'],
+			['Diversidad Funcional', 'fa-solid fa-wheelchair'],
+			['Salud', 'fa-solid fa-heart-pulse'],
+			['Adicciones', 'fa-solid fa-pills'],
+			['Personas Inmigrantes/Emigrantes', 'fa-solid fa-earth-europe'],
+			['Personas Mayores', 'fa-solid fa-person-cane'],
+			['Personas sin hogar', 'fa-solid fa-house-chimney'],
+			['Mejora del Hábitat y la Convivencia', 'fa-solid fa-people-group'],
+			['Seguridad Ciudadana, Movilidad y Transporte', 'fa-solid fa-shield'],
+			['Cultura y Deporte', 'fa-solid fa-masks-theater'],
+			['Medio Ambiente y Espacios Verdes', 'fa-solid fa-tree'],
+			['Participación Ciudadana', 'fa-solid fa-handshake-angle'],
+			['Urbanismo y Equipamientos', 'fa-solid fa-city'],
+			['Vivienda', 'fa-solid fa-house'],
+			['Turismo', 'fa-solid fa-plane-departure'],
+		];
+
+		foreach ($items as [$nombre, $icono_clase]) {
+			$slug = function_exists('sanitize_title') ? sanitize_title($nombre) : strtolower(trim(preg_replace('/[^a-z0-9]+/i', '-', $nombre) ?? '', '-'));
+			$wpdb->query(
+				$wpdb->prepare(
+					"INSERT IGNORE INTO {$table} (nombre, slug, icono_media_id, icono_svg, icono_clase, marker_style, created_at, updated_at)
+					VALUES (%s, %s, NULL, '', %s, '', %s, %s)",
+					$nombre,
+					$slug,
+					$icono_clase,
+					$now,
+					$now
+				)
+			);
 		}
 	}
 }

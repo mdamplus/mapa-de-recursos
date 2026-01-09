@@ -481,6 +481,20 @@ class Importer {
 				$entidad_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE id = %d", $entidad_id));
 			} else {
 				$entidad_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE nombre = %s LIMIT 1", $entidad_nombre));
+				if (! $entidad_id && $entidad_nombre !== '') {
+					$wpdb->insert(
+						$entidades_table,
+						[
+							'nombre' => $entidad_nombre,
+							'slug'   => sanitize_title($entidad_nombre),
+						],
+						['%s', '%s']
+					);
+					$entidad_id = (int) $wpdb->insert_id;
+					if (! $entidad_id) {
+						$entidad_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE nombre = %s LIMIT 1", $entidad_nombre));
+					}
+				}
 			}
 			if (! $entidad_id) {
 				continue;

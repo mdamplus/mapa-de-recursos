@@ -103,7 +103,8 @@ class Financiaciones {
 			$editing = $this->get(absint($_GET['id']));
 		}
 
-		$list = $this->get_all();
+		$order_param = isset($_GET['order']) ? sanitize_text_field(wp_unslash($_GET['order'])) : 'id_desc';
+		$list = $this->get_all($order_param);
 		$can_bulk = current_user_can('manage_options');
 		?>
 		<div class="wrap">
@@ -160,8 +161,8 @@ class Financiaciones {
 								<?php if ($can_bulk) : ?>
 									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_financiacion_ids[]"></th>
 								<?php endif; ?>
-								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
+								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?> <a href="<?php echo esc_url(add_query_arg(['order' => 'id_asc'])); ?>">↑</a> <a href="<?php echo esc_url(add_query_arg(['order' => 'id_desc'])); ?>">↓</a></th>
+								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?> <a href="<?php echo esc_url(add_query_arg(['order' => 'name_asc'])); ?>">↑</a> <a href="<?php echo esc_url(add_query_arg(['order' => 'name_desc'])); ?>">↓</a></th>
 								<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
 							</tr>
 						</thead>
@@ -173,10 +174,9 @@ class Financiaciones {
 									<?php endif; ?>
 									<td><?php echo esc_html((string) $item->id); ?></td>
 									<td><?php echo esc_html($item->nombre); ?></td>
-									<td>
-										<a href="<?php echo esc_url(add_query_arg(['page' => 'mdr_financiaciones', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
-										|
-										<a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_financiaciones', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_financiacion')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar este financiador?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
+									<td class="mdr-actions">
+										<a class="button button-primary button-small" href="<?php echo esc_url(add_query_arg(['page' => 'mdr_financiaciones', 'action' => 'edit', 'id' => $item->id], admin_url('admin.php'))); ?>"><?php esc_html_e('Editar', 'mapa-de-recursos'); ?></a>
+										<a class="button button-secondary button-small is-danger" href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => 'mdr_financiaciones', 'action' => 'delete', 'id' => $item->id], admin_url('admin.php')), 'mdr_delete_financiacion')); ?>" onclick="return confirm('<?php esc_attr_e('¿Eliminar este financiador?', 'mapa-de-recursos'); ?>');"><?php esc_html_e('Eliminar', 'mapa-de-recursos'); ?></a>
 									</td>
 								</tr>
 							<?php endforeach; else : ?>
@@ -185,7 +185,7 @@ class Financiaciones {
 						</tbody>
 					</table>
 					<?php if ($can_bulk) : ?>
-						<button type="submit" class="button button-secondary"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
+						<button type="submit" class="button button-secondary is-danger"><?php esc_html_e('Eliminar seleccionados', 'mapa-de-recursos'); ?></button>
 					<?php endif; ?>
 				</form>
 				</div>
@@ -194,10 +194,18 @@ class Financiaciones {
 		<?php
 	}
 
-	private function get_all(): array {
+	private function get_all(string $order_param = 'id_desc'): array {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_financiaciones";
-		return (array) $wpdb->get_results("SELECT * FROM {$table} ORDER BY nombre ASC");
+		$order = 'id DESC';
+		if ($order_param === 'id_asc') {
+			$order = 'id ASC';
+		} elseif ($order_param === 'name_asc') {
+			$order = 'nombre ASC';
+		} elseif ($order_param === 'name_desc') {
+			$order = 'nombre DESC';
+		}
+		return (array) $wpdb->get_results("SELECT * FROM {$table} ORDER BY {$order}");
 	}
 
 	private function get(int $id) {

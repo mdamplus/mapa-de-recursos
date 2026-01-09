@@ -91,7 +91,8 @@ class Subcategorias {
 			$editing = $this->get(absint($_GET['id']));
 		}
 
-		$list = $this->get_all();
+		$order_param = isset($_GET['order']) ? sanitize_text_field(wp_unslash($_GET['order'])) : 'id_desc';
+		$list = $this->get_all($order_param);
 		$ambitos = $this->get_ambitos();
 		$can_bulk = current_user_can('manage_options');
 		?>
@@ -140,9 +141,9 @@ class Subcategorias {
 								<?php if ($can_bulk) : ?>
 									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_subcat_ids[]"></th>
 								<?php endif; ?>
-								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?></th>
+								<th><?php esc_html_e('ID', 'mapa-de-recursos'); ?> <a href="<?php echo esc_url(add_query_arg(['order' => 'id_asc'])); ?>">↑</a> <a href="<?php echo esc_url(add_query_arg(['order' => 'id_desc'])); ?>">↓</a></th>
 								<th><?php esc_html_e('Ámbito', 'mapa-de-recursos'); ?></th>
-								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?></th>
+								<th><?php esc_html_e('Nombre', 'mapa-de-recursos'); ?> <a href="<?php echo esc_url(add_query_arg(['order' => 'name_asc'])); ?>">↑</a> <a href="<?php echo esc_url(add_query_arg(['order' => 'name_desc'])); ?>">↓</a></th>
 								<th><?php esc_html_e('Acciones', 'mapa-de-recursos'); ?></th>
 							</tr>
 						</thead>
@@ -175,15 +176,23 @@ class Subcategorias {
 		<?php
 	}
 
-	private function get_all(): array {
+	private function get_all(string $order_param = 'id_desc'): array {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_subcategorias";
 		$amb   = "{$wpdb->prefix}mdr_ambitos";
+		$order = 's.id DESC';
+		if ($order_param === 'id_asc') {
+			$order = 's.id ASC';
+		} elseif ($order_param === 'name_asc') {
+			$order = 's.nombre ASC';
+		} elseif ($order_param === 'name_desc') {
+			$order = 's.nombre DESC';
+		}
 		return (array) $wpdb->get_results("
 			SELECT s.*, a.nombre as ambito_nombre
 			FROM {$table} s
 			LEFT JOIN {$amb} a ON a.id = s.ambito_id
-			ORDER BY a.nombre ASC, s.nombre ASC
+			ORDER BY {$order}
 		");
 	}
 
