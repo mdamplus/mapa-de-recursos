@@ -252,7 +252,7 @@ class Importer {
 			if ($nombre === '') {
 				continue;
 			}
-			$slug = sanitize_title($nombre);
+			$slug = $this->ensure_unique_slug($table, sanitize_title($nombre));
 			$exists = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE nombre = %s LIMIT 1", $nombre));
 			if ($exists) {
 				continue;
@@ -482,11 +482,12 @@ class Importer {
 			} else {
 				$entidad_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$entidades_table} WHERE nombre = %s LIMIT 1", $entidad_nombre));
 				if (! $entidad_id && $entidad_nombre !== '') {
+					$slug = $this->ensure_unique_slug($entidades_table, sanitize_title($entidad_nombre));
 					$wpdb->insert(
 						$entidades_table,
 						[
 							'nombre' => $entidad_nombre,
-							'slug'   => sanitize_title($entidad_nombre),
+							'slug'   => $slug,
 						],
 						['%s', '%s']
 					);
@@ -573,5 +574,17 @@ class Importer {
 			$count++;
 		}
 		return $count;
+	}
+
+	private function ensure_unique_slug(string $table, string $base): string {
+		global $wpdb;
+		$slug = $base !== '' ? $base : 'item';
+		$original = $slug;
+		$i = 2;
+		while ((int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table} WHERE slug = %s", $slug)) > 0) {
+			$slug = "{$original}-{$i}";
+			$i++;
+		}
+		return $slug;
 	}
 }

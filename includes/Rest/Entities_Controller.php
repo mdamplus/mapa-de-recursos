@@ -43,6 +43,7 @@ class Entities_Controller extends WP_REST_Controller {
 		$subcategoria = $request->get_param('subcategoria');
 		$servicio = $request->get_param('servicio');
 		$q = $request->get_param('q');
+		$all = (bool) $request->get_param('all');
 
 		$params_for_cache = [
 			'bbox'         => $bbox,
@@ -51,6 +52,7 @@ class Entities_Controller extends WP_REST_Controller {
 			'subcategoria' => $subcategoria,
 			'servicio'     => $servicio,
 			'q'            => $q,
+			'all'          => $all,
 		];
 
 		$cache_key = 'mdr_entidades_' . md5(wp_json_encode($params_for_cache));
@@ -78,6 +80,9 @@ class Entities_Controller extends WP_REST_Controller {
 			$params[] = $bbox['maxLat'];
 			$params[] = $bbox['minLng'];
 			$params[] = $bbox['maxLng'];
+		} elseif (! $all) {
+			// Si no hay bbox y no se pide todo, filtramos a los que tengan coordenadas.
+			$where[] = 'e.lat IS NOT NULL AND e.lng IS NOT NULL';
 		}
 
 		if (! empty($zona)) {
@@ -174,6 +179,11 @@ class Entities_Controller extends WP_REST_Controller {
 				'type'        => 'string',
 				'required'    => false,
 				'sanitize_callback' => 'sanitize_text_field',
+			],
+			'all' => [
+				'type'        => 'boolean',
+				'required'    => false,
+				'description' => __('Si es true ignora bbox y devuelve todas las entidades (máx 2000).', 'mapa-de-recursos'),
 			],
 		];
 	}

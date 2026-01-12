@@ -128,7 +128,8 @@ class Recursos {
 		$gestoras = $this->get_entidades();
 		$financiaciones = $this->get_financiaciones();
 		$order_param = isset($_GET['order']) ? sanitize_text_field(wp_unslash($_GET['order'])) : 'id_desc';
-		$recursos = $this->get_recursos($order_param);
+		$search = isset($_GET['s']) ? sanitize_text_field(wp_unslash($_GET['s'])) : '';
+		$recursos = $this->get_recursos($order_param, $search);
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e('Recursos', 'mapa-de-recursos'); ?></h1>
@@ -285,11 +286,17 @@ class Recursos {
 				</div>
 				<div class="mdr-admin-col">
 					<h2><?php esc_html_e('Listado', 'mapa-de-recursos'); ?></h2>
-					<form method="post">
-						<?php wp_nonce_field('mdr_recursos_bulk_delete', 'mdr_recursos_bulk_nonce'); ?>
-						<table class="widefat striped">
-							<thead>
-								<tr>
+					<form method="get" style="margin-bottom:12px;">
+						<input type="hidden" name="page" value="mdr_recursos">
+						<input type="hidden" name="order" value="<?php echo esc_attr($order_param); ?>">
+						<input type="search" name="s" value="<?php echo esc_attr($search); ?>" placeholder="<?php esc_attr_e('Buscar por recurso o entidad', 'mapa-de-recursos'); ?>" class="regular-text">
+						<button class="button"><?php esc_html_e('Buscar', 'mapa-de-recursos'); ?></button>
+					</form>
+				<form method="post">
+					<?php wp_nonce_field('mdr_recursos_bulk_delete', 'mdr_recursos_bulk_nonce'); ?>
+					<table class="widefat striped">
+						<thead>
+							<tr>
 									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_recurso_ids[]"></th>
 									<th>
 										<?php esc_html_e('ID', 'mapa-de-recursos'); ?>
@@ -348,7 +355,7 @@ class Recursos {
 		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
 	}
 
-	private function get_recursos(string $order_param = 'id_desc'): array {
+	private function get_recursos(string $order_param = 'id_desc', string $search = ''): array {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_recursos";
 		$ent   = "{$wpdb->prefix}mdr_entidades";
@@ -368,16 +375,18 @@ class Recursos {
 		} elseif ($order_param === 'activo_desc') {
 			$order = 'r.activo DESC';
 		}
-		return (array) $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT r.*, e.nombre as entidad_nombre
-				FROM {$table} r
-				LEFT JOIN {$ent} e ON e.id = r.entidad_id
-				ORDER BY {$order}
-				LIMIT %d",
-				200
-			)
-		);
+		$sql = "SELECT r.*, e.nombre as entidad_nombre FROM {$table} r LEFT JOIN {$ent} e ON e.id = r.entidad_id WHERE 1=1";
+		$args = [];
+		$search = trim($search);
+		if ($search !== '') {
+			$like = '%' . $wpdb->esc_like($search) . '%';
+			$sql .= " AND (r.recurso_programa LIKE %s OR e.nombre LIKE %s)";
+			$args[] = $like;
+			$args[] = $like;
+		}
+		$sql .= " ORDER BY {$order} LIMIT %d";
+		$args[] = $search ? 500 : 200;
+		return (array) $wpdb->get_results($wpdb->prepare($sql, $args));
 	}
 
 	private function get_entidades(): array {

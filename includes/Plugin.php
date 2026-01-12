@@ -43,6 +43,9 @@ class Plugin {
 		add_action('init', [$this, 'register_shortcodes']);
 		add_action('rest_api_init', [$this, 'register_rest_routes']);
 		add_action('admin_menu', [$this, 'register_admin']);
+		add_action('init', [$this, 'add_entity_rewrite']);
+		add_filter('query_vars', [$this, 'add_entity_query_var']);
+		add_action('template_redirect', [$this, 'maybe_render_entity_route']);
 		add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
 		add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
 		add_filter('plugin_action_links_' . plugin_basename(MAPA_DE_RECURSOS_FILE), [$this, 'plugin_action_links']);
@@ -62,6 +65,8 @@ class Plugin {
 
 	public function register_shortcodes(): void {
 		add_shortcode('mapa_de_recursos', [$this, 'render_shortcode']);
+		add_shortcode('mdr_entidades_mapa', [$this, 'render_entities_map_shortcode']);
+		add_shortcode('mdr_entidad', [$this, 'render_entity_detail_shortcode']);
 	}
 
 	public function register_rest_routes(): void {
@@ -164,9 +169,25 @@ class Plugin {
 			MAPA_DE_RECURSOS_VERSION,
 			true
 		);
+		wp_register_script(
+			'mdr-entities-map',
+			MAPA_DE_RECURSOS_URL . 'assets/js/entities-map.js',
+			['mdr-leaflet', 'mdr-leaflet-cluster'],
+			MAPA_DE_RECURSOS_VERSION,
+			true
+		);
 
 		if (! is_singular() && ! is_front_page()) {
 			return;
+		}
+
+		if (! empty($settings['load_bulma_front'])) {
+			wp_enqueue_style(
+				'mdr-bulma-front',
+				'https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css',
+				[],
+				'0.9.4'
+			);
 		}
 
 		wp_enqueue_style('mdr-frontend');
@@ -326,10 +347,167 @@ class Plugin {
 		return (string) ob_get_clean();
 	}
 
+	public function render_entities_map_shortcode(array $atts = []): string {
+		$settings = $this->get_settings();
+		$atts = shortcode_atts([
+			'width' => '100%',
+			'height' => '500px',
+		], $atts, 'mdr_entidades_mapa');
+		if (! wp_script_is('mdr-entities-map', 'registered')) {
+			$this->enqueue_frontend_assets();
+		}
+		wp_enqueue_style('mdr-frontend');
+		wp_enqueue_script('mdr-entities-map');
+		wp_localize_script(
+			'mdr-entities-map',
+			'mdrEntities',
+			[
+				'restUrl'     => esc_url_raw(rest_url('mdr/v1/entidades')),
+				'nonce'       => wp_create_nonce('wp_rest'),
+				'entityUrlBase' => trailingslashit(home_url('/entidades/')),
+				'fallbackCenter' => $settings['fallback_center'],
+				'markerIcon'   => $settings['entity_marker_url'] ?? '',
+				'strings' => [
+					'loading' => __('Cargando entidades...', 'mapa-de-recursos'),
+					'noResults' => __('No hay entidades para mostrar.', 'mapa-de-recursos'),
+					'viewServices' => __('Ver servicios', 'mapa-de-recursos'),
+				],
+			]
+		);
+
+		ob_start();
+		?>
+		<div id="mdr-entities-map" class="mdr-entities-map-wrap" style="width: <?php echo esc_attr($atts['width']); ?>;">
+			<div id="mdr-entities-map-status" class="mdr-status"></div>
+			<div id="mdr-entities-map-canvas" class="mdr-map" style="height: <?php echo esc_attr($atts['height']); ?>;"></div>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	public function render_entity_detail_shortcode(array $atts = []): string {
+		global $wpdb;
+		$atts = shortcode_atts(['slug' => ''], $atts, 'mdr_entidad');
+		$slug = sanitize_title($atts['slug']);
+		if ($slug === '') {
+			return '';
+		}
+		$table_ent = "{$wpdb->prefix}mdr_entidades";
+		$table_rec = "{$wpdb->prefix}mdr_recursos";
+		$entity = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_ent} WHERE slug = %s", $slug));
+		if (! $entity) {
+			return '';
+		}
+		$recursos = (array) $wpdb->get_results($wpdb->prepare("SELECT id, recurso_programa, descripcion FROM {$table_rec} WHERE entidad_id = %d AND activo = 1 ORDER BY id DESC LIMIT 50", $entity->id));
+
+		// Posts recientes (3).
+		$posts = get_posts([
+			'numberposts' => 3,
+			'post_status' => 'publish',
+		]);
+
+		if (! wp_script_is('mdr-leaflet', 'enqueued')) {
+			$this->enqueue_frontend_assets();
+		}
+		wp_enqueue_style('mdr-frontend');
+		wp_enqueue_script('mdr-leaflet');
+
+		ob_start();
+		$logo = $entity->logo_url ?: ($entity->logo_media_id ? wp_get_attachment_url((int) $entity->logo_media_id) : '');
+		?>
+		<div class="mdr-entity-detail">
+			<div class="mdr-entity-hero">
+				<div class="mdr-entity-map" id="mdr-entity-map" data-lat="<?php echo esc_attr((string) $entity->lat); ?>" data-lng="<?php echo esc_attr((string) $entity->lng); ?>" data-name="<?php echo esc_attr($entity->nombre); ?>"></div>
+			</div>
+			<div class="mdr-entity-columns">
+				<div class="mdr-entity-col">
+					<h2><?php echo esc_html($entity->nombre); ?></h2>
+					<p><?php echo esc_html($entity->direccion_linea1); ?></p>
+					<p><?php echo esc_html($entity->telefono); ?></p>
+					<p><?php echo esc_html($entity->email); ?></p>
+					<?php if ($logo) : ?>
+						<div class="mdr-entity-logo"><img src="<?php echo esc_url($logo); ?>" alt="<?php echo esc_attr($entity->nombre); ?>" /></div>
+					<?php endif; ?>
+				</div>
+				<div class="mdr-entity-col">
+					<h3><?php esc_html_e('Servicios', 'mapa-de-recursos'); ?></h3>
+					<?php if ($recursos) : ?>
+						<ul class="mdr-entity-services">
+							<?php foreach ($recursos as $rec) : ?>
+								<li>
+									<strong><?php echo esc_html($rec->recurso_programa); ?></strong>
+									<div><?php echo esc_html(wp_trim_words((string) $rec->descripcion, 20)); ?></div>
+								</li>
+							<?php endforeach; ?>
+						</ul>
+					<?php else : ?>
+						<p><?php esc_html_e('Sin servicios activos.', 'mapa-de-recursos'); ?></p>
+					<?php endif; ?>
+				</div>
+			</div>
+			<?php if ($posts) : ?>
+				<div class="mdr-entity-posts">
+					<h3><?php esc_html_e('Publicaciones recientes', 'mapa-de-recursos'); ?></h3>
+					<div class="mdr-post-grid">
+						<?php foreach ($posts as $post) : ?>
+							<a class="mdr-post-card" href="<?php echo esc_url(get_permalink($post)); ?>">
+								<?php if (has_post_thumbnail($post)) : ?>
+									<div class="mdr-post-thumb"><?php echo get_the_post_thumbnail($post, 'medium'); ?></div>
+								<?php endif; ?>
+								<div class="mdr-post-title"><?php echo esc_html(get_the_title($post)); ?></div>
+							</a>
+						<?php endforeach; ?>
+					</div>
+				</div>
+			<?php endif; ?>
+		</div>
+		<script>
+		document.addEventListener('DOMContentLoaded', function(){
+			if (typeof L === 'undefined') return;
+			var mapEl = document.getElementById('mdr-entity-map');
+			if (!mapEl) return;
+			var lat = parseFloat(mapEl.dataset.lat);
+			var lng = parseFloat(mapEl.dataset.lng);
+			if (isNaN(lat) || isNaN(lng)) return;
+			var map = L.map(mapEl).setView([lat, lng], 14);
+			L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+				attribution: '&copy; OpenStreetMap contributors'
+			}).addTo(map);
+			L.marker([lat, lng]).addTo(map).bindPopup(mapEl.dataset.name || '');
+		});
+		</script>
+		<?php
+		return (string) ob_get_clean();
+	}
+
 	public function plugin_action_links(array $links): array {
 		$settings_link = '<a href="' . esc_url(admin_url('admin.php?page=mdr_settings')) . '">' . esc_html__('Ajustes', 'mapa-de-recursos') . '</a>';
 		array_unshift($links, $settings_link);
 		return $links;
+	}
+
+	public function add_entity_rewrite(): void {
+		add_rewrite_tag('%mdr_entidad_slug%', '([^&]+)');
+		add_rewrite_rule('^entidades/([^/]+)/?$', 'index.php?mdr_entidad_slug=$matches[1]', 'top');
+	}
+
+	public function add_entity_query_var(array $vars): array {
+		$vars[] = 'mdr_entidad_slug';
+		return $vars;
+	}
+
+	public function maybe_render_entity_route(): void {
+		$slug = get_query_var('mdr_entidad_slug');
+		if (! $slug) {
+			return;
+		}
+		status_header(200);
+		nocache_headers();
+		$content = $this->render_entity_detail_shortcode(['slug' => $slug]);
+		get_header();
+		echo '<main class="mdr-entity-page">' . $content . '</main>';
+		get_footer();
+		exit;
 	}
 
 	public static function activate(): void {
@@ -354,6 +532,8 @@ class Plugin {
 			],
 			'default_zona'      => '',
 			'fa_kit'            => 'f2eb5a66e3',
+			'load_bulma_front'  => 1,
+			'entity_marker_url' => '',
 		];
 
 		$saved = get_option('mapa_de_recursos_settings', []);

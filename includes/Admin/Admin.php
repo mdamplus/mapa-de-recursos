@@ -191,6 +191,8 @@ class Admin {
 				],
 				'default_zona'      => isset($_POST['default_zona']) ? absint($_POST['default_zona']) : '',
 				'fa_kit'            => isset($_POST['fa_kit']) ? sanitize_text_field(wp_unslash($_POST['fa_kit'])) : 'f2eb5a66e3',
+				'load_bulma_front'  => isset($_POST['load_bulma_front']) ? 1 : 0,
+				'entity_marker_url' => isset($_POST['entity_marker_url']) ? esc_url_raw(wp_unslash($_POST['entity_marker_url'])) : '',
 			];
 			update_option('mapa_de_recursos_settings', $settings);
 			$this->logger->log('update_settings', 'settings', ['provider' => $settings['map_provider']], 'plugin');
@@ -236,6 +238,8 @@ class Admin {
 						<td>
 							<input type="text" name="fallback_lat" value="<?php echo isset($settings['fallback_center']['lat']) ? esc_attr($settings['fallback_center']['lat']) : '36.7213'; ?>" size="10" />
 							<input type="text" name="fallback_lng" value="<?php echo isset($settings['fallback_center']['lng']) ? esc_attr($settings['fallback_center']['lng']) : '-4.4214'; ?>" size="10" />
+							<p class="description"><?php esc_html_e('Selecciona en el mapa o ajusta manualmente.', 'mapa-de-recursos'); ?></p>
+							<div id="mdr-settings-map" style="max-width:520px; height:320px; margin-top:10px; border:1px solid #e5e5e5; border-radius:6px;"></div>
 						</td>
 					</tr>
 					<tr>
@@ -251,9 +255,72 @@ class Admin {
 							<p class="description"><?php esc_html_e('Se cargará desde kit.fontawesome.com/{kit}.js (clásico solid/regular/brands).', 'mapa-de-recursos'); ?></p>
 						</td>
 					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Cargar Bulma en frontend', 'mapa-de-recursos'); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="load_bulma_front" value="1" <?php checked($settings['load_bulma_front'] ?? 0, 1); ?> />
+								<?php esc_html_e('Incluir Bulma CSS en las páginas con el shortcode', 'mapa-de-recursos'); ?>
+							</label>
+							<p class="description"><?php esc_html_e('Desmarca si tu tema ya carga Bulma o prefieres no añadirlo.', 'mapa-de-recursos'); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Icono de marcador (entidades)', 'mapa-de-recursos'); ?></th>
+						<td>
+							<input type="text" name="entity_marker_url" id="entity_marker_url" value="<?php echo isset($settings['entity_marker_url']) ? esc_attr((string) $settings['entity_marker_url']) : ''; ?>" class="regular-text" placeholder="<?php esc_attr_e('URL de PNG/SVG', 'mapa-de-recursos'); ?>" />
+							<button type="button" class="button" id="mdr-upload-marker"><?php esc_html_e('Seleccionar', 'mapa-de-recursos'); ?></button>
+							<p class="description"><?php esc_html_e('Icono opcional para los marcadores del mapa de entidades.', 'mapa-de-recursos'); ?></p>
+						</td>
+					</tr>
 				</table>
 				<?php submit_button(__('Guardar ajustes', 'mapa-de-recursos')); ?>
 			</form>
+			<script>
+			document.addEventListener('DOMContentLoaded', function () {
+				if (typeof L === 'undefined') { return; }
+				const latInput = document.querySelector('input[name="fallback_lat"]');
+				const lngInput = document.querySelector('input[name="fallback_lng"]');
+				const mapEl = document.getElementById('mdr-settings-map');
+				if (!latInput || !lngInput || !mapEl) { return; }
+
+				const lat = parseFloat(latInput.value) || 36.7213;
+				const lng = parseFloat(lngInput.value) || -4.4214;
+				const map = L.map(mapEl).setView([lat, lng], 12);
+				L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+					attribution: '&copy; OpenStreetMap contributors'
+				}).addTo(map);
+
+				const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+
+				function updateInputs(latLng) {
+					latInput.value = latLng.lat.toFixed(6);
+					lngInput.value = latLng.lng.toFixed(6);
+				}
+
+				marker.on('dragend', function (e) {
+					updateInputs(e.target.getLatLng());
+				});
+
+				map.on('click', function (e) {
+					marker.setLatLng(e.latlng);
+					updateInputs(e.latlng);
+				});
+
+				function recenter() {
+					const newLat = parseFloat(latInput.value);
+					const newLng = parseFloat(lngInput.value);
+					if (!isNaN(newLat) && !isNaN(newLng)) {
+						const ll = L.latLng(newLat, newLng);
+						marker.setLatLng(ll);
+						map.setView(ll);
+					}
+				}
+
+				latInput.addEventListener('change', recenter);
+				lngInput.addEventListener('change', recenter);
+			});
+			</script>
 			<hr />
 			<h2><?php esc_html_e('Utilidades', 'mapa-de-recursos'); ?></h2>
 			<form method="post">

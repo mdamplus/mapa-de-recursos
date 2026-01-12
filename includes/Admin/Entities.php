@@ -133,7 +133,11 @@ class Entities {
 
 		$zonas = $this->get_zonas();
 		$order_param = isset($_GET['order']) ? sanitize_text_field(wp_unslash($_GET['order'])) : 'id_desc';
-		$entities = $this->get_entities($order_param);
+		$paged = isset($_GET['paged']) ? max(1, (int) $_GET['paged']) : 1;
+		$per_page = 56;
+		$entities = $this->get_entities($order_param, $per_page, $paged);
+		$total = $this->count_entities();
+		$total_pages = $total > 0 ? (int) ceil($total / $per_page) : 1;
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e('Entidades', 'mapa-de-recursos'); ?></h1>
@@ -243,9 +247,9 @@ class Entities {
 				</div>
 				<div class="mdr-admin-col">
 					<h2><?php esc_html_e('Listado', 'mapa-de-recursos'); ?></h2>
-					<form method="post">
-						<?php wp_nonce_field('mdr_entities_bulk_delete', 'mdr_entities_bulk_nonce'); ?>
-						<table class="widefat striped">
+				<form method="post">
+					<?php wp_nonce_field('mdr_entities_bulk_delete', 'mdr_entities_bulk_nonce'); ?>
+					<table class="widefat striped">
 							<thead>
 								<tr>
 									<th><input type="checkbox" class="mdr-select-all" data-target="mdr_entity_ids[]"></th>
@@ -288,10 +292,33 @@ class Entities {
 								<?php else : ?>
 									<tr><td colspan="7"><?php esc_html_e('Sin entidades todavía.', 'mapa-de-recursos'); ?></td></tr>
 								<?php endif; ?>
-							</tbody>
-						</table>
-						<?php submit_button(__('Eliminar seleccionadas', 'mapa-de-recursos'), 'delete'); ?>
-					</form>
+						</tbody>
+					</table>
+					<?php submit_button(__('Eliminar seleccionadas', 'mapa-de-recursos'), 'delete'); ?>
+					<?php if ($total_pages > 1) : ?>
+						<div class="tablenav">
+							<div class="tablenav-pages">
+								<?php
+								$base_url = remove_query_arg(['paged'], add_query_arg(['page' => 'mdr_entidades', 'order' => $order_param], admin_url('admin.php')));
+								$prev = $paged > 1 ? add_query_arg('paged', $paged - 1, $base_url) : '';
+								$next = $paged < $total_pages ? add_query_arg('paged', $paged + 1, $base_url) : '';
+								?>
+								<span class="displaying-num"><?php echo esc_html($total); ?> <?php esc_html_e('entidades', 'mapa-de-recursos'); ?></span>
+								<?php if ($prev) : ?>
+									<a class="button button-secondary" href="<?php echo esc_url($prev); ?>">&larr; <?php esc_html_e('Anterior', 'mapa-de-recursos'); ?></a>
+								<?php else : ?>
+									<span class="button disabled">&larr; <?php esc_html_e('Anterior', 'mapa-de-recursos'); ?></span>
+								<?php endif; ?>
+								<span class="pagination-links"><?php echo esc_html(sprintf(__('Página %d de %d', 'mapa-de-recursos'), $paged, $total_pages)); ?></span>
+								<?php if ($next) : ?>
+									<a class="button button-secondary" href="<?php echo esc_url($next); ?>"><?php esc_html_e('Siguiente', 'mapa-de-recursos'); ?> &rarr;</a>
+								<?php else : ?>
+									<span class="button disabled"><?php esc_html_e('Siguiente', 'mapa-de-recursos'); ?> &rarr;</span>
+								<?php endif; ?>
+							</div>
+						</div>
+					<?php endif; ?>
+				</form>
 				</div>
 			</div>
 		</div>
@@ -304,7 +331,7 @@ class Entities {
 		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
 	}
 
-	private function get_entities(string $order_param = 'id_desc'): array {
+	private function get_entities(string $order_param = 'id_desc', int $per_page = 56, int $paged = 1): array {
 		global $wpdb;
 		$table = "{$wpdb->prefix}mdr_entidades";
 		$zonas = "{$wpdb->prefix}mdr_zonas";
@@ -320,15 +347,24 @@ class Entities {
 		} elseif ($order_param === 'zona_desc') {
 			$order = 'z.nombre DESC';
 		}
+		$per_page = $per_page > 0 ? $per_page : 56;
+		$offset = ($paged > 1 ? ($paged - 1) * $per_page : 0);
 		return (array) $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT e.*, z.nombre as zona_nombre FROM {$table} e
 				LEFT JOIN {$zonas} z ON z.id = e.zona_id
 				ORDER BY {$order}
-				LIMIT %d",
-				200
+				LIMIT %d OFFSET %d",
+				$per_page,
+				$offset
 			)
 		);
+	}
+
+	private function count_entities(): int {
+		global $wpdb;
+		$table = "{$wpdb->prefix}mdr_entidades";
+		return (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
 	}
 
 	private function get_zonas(): array {
