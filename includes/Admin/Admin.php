@@ -193,6 +193,9 @@ class Admin {
 				'fa_kit'            => isset($_POST['fa_kit']) ? sanitize_text_field(wp_unslash($_POST['fa_kit'])) : 'f2eb5a66e3',
 				'load_bulma_front'  => isset($_POST['load_bulma_front']) ? 1 : 0,
 				'entity_marker_url' => isset($_POST['entity_marker_url']) ? esc_url_raw(wp_unslash($_POST['entity_marker_url'])) : '',
+				'service_marker_url' => isset($_POST['service_marker_url']) ? esc_url_raw(wp_unslash($_POST['service_marker_url'])) : '',
+				'recurso_marker_url' => isset($_POST['recurso_marker_url']) ? esc_url_raw(wp_unslash($_POST['recurso_marker_url'])) : '',
+				'agenda_api_url'    => isset($_POST['agenda_api_url']) ? esc_url_raw(wp_unslash($_POST['agenda_api_url'])) : 'https://asociacionarrabal.org/wp-json/wp/v2/agenda',
 			];
 			update_option('mapa_de_recursos_settings', $settings);
 			$this->logger->log('update_settings', 'settings', ['provider' => $settings['map_provider']], 'plugin');
@@ -256,6 +259,13 @@ class Admin {
 						</td>
 					</tr>
 					<tr>
+						<th scope="row"><?php esc_html_e('URL API Agenda (origen)', 'mapa-de-recursos'); ?></th>
+						<td>
+							<input type="url" name="agenda_api_url" value="<?php echo isset($settings['agenda_api_url']) ? esc_attr((string) $settings['agenda_api_url']) : 'https://asociacionarrabal.org/wp-json/wp/v2/agenda'; ?>" class="regular-text" />
+							<p class="description"><?php esc_html_e('Endpoint wp/v2/agenda del sitio origen (se añadirá _embed=1 automáticamente).', 'mapa-de-recursos'); ?></p>
+						</td>
+					</tr>
+					<tr>
 						<th scope="row"><?php esc_html_e('Cargar Bulma en frontend', 'mapa-de-recursos'); ?></th>
 						<td>
 							<label>
@@ -269,8 +279,24 @@ class Admin {
 						<th scope="row"><?php esc_html_e('Icono de marcador (entidades)', 'mapa-de-recursos'); ?></th>
 						<td>
 							<input type="text" name="entity_marker_url" id="entity_marker_url" value="<?php echo isset($settings['entity_marker_url']) ? esc_attr((string) $settings['entity_marker_url']) : ''; ?>" class="regular-text" placeholder="<?php esc_attr_e('URL de PNG/SVG', 'mapa-de-recursos'); ?>" />
-							<button type="button" class="button" id="mdr-upload-marker"><?php esc_html_e('Seleccionar', 'mapa-de-recursos'); ?></button>
+							<button type="button" class="button mdr-upload-marker" data-target="entity_marker_url"><?php esc_html_e('Seleccionar', 'mapa-de-recursos'); ?></button>
 							<p class="description"><?php esc_html_e('Icono opcional para los marcadores del mapa de entidades.', 'mapa-de-recursos'); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Icono de marcador (servicios)', 'mapa-de-recursos'); ?></th>
+						<td>
+							<input type="text" name="service_marker_url" id="service_marker_url" value="<?php echo isset($settings['service_marker_url']) ? esc_attr((string) $settings['service_marker_url']) : ''; ?>" class="regular-text" placeholder="<?php esc_attr_e('URL de PNG/SVG', 'mapa-de-recursos'); ?>" />
+							<button type="button" class="button mdr-upload-marker" data-target="service_marker_url"><?php esc_html_e('Seleccionar', 'mapa-de-recursos'); ?></button>
+							<p class="description"><?php esc_html_e('Icono opcional para markers de servicios.', 'mapa-de-recursos'); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Icono de marcador (recursos)', 'mapa-de-recursos'); ?></th>
+						<td>
+							<input type="text" name="recurso_marker_url" id="recurso_marker_url" value="<?php echo isset($settings['recurso_marker_url']) ? esc_attr((string) $settings['recurso_marker_url']) : ''; ?>" class="regular-text" placeholder="<?php esc_attr_e('URL de PNG/SVG', 'mapa-de-recursos'); ?>" />
+							<button type="button" class="button mdr-upload-marker" data-target="recurso_marker_url"><?php esc_html_e('Seleccionar', 'mapa-de-recursos'); ?></button>
+							<p class="description"><?php esc_html_e('Icono opcional para markers de recursos.', 'mapa-de-recursos'); ?></p>
 						</td>
 					</tr>
 				</table>

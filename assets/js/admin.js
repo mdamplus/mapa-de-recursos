@@ -58,26 +58,29 @@
 	}
 
 	function initMarkerUploader() {
-		const $btn = $('#mdr-upload-marker');
-		if (!$btn.length || typeof wp === 'undefined' || !wp.media) {
+		const $btns = $('.mdr-upload-marker');
+		if (!$btns.length || typeof wp === 'undefined' || !wp.media) {
 			return;
 		}
-		const $input = $('#entity_marker_url');
 		let frame;
-
-		$btn.on('click', function (e) {
+		$btns.on('click', function (e) {
 			e.preventDefault();
-			if (frame) {
-				frame.open();
+			const target = $(this).data('target');
+			const $input = $('#' + target);
+			if (!target || !$input.length) {
 				return;
 			}
-			frame = wp.media({
-				title: 'Seleccionar icono marcador',
-				button: { text: 'Usar icono' },
-				multiple: false,
-				library: { type: ['image', 'image/svg+xml', 'image/svg'] },
-			});
-			frame.on('select', function () {
+			if (frame) {
+				frame.open();
+			} else {
+				frame = wp.media({
+					title: 'Seleccionar icono marcador',
+					button: { text: 'Usar icono' },
+					multiple: false,
+					library: { type: ['image', 'image/svg+xml', 'image/svg'] },
+				});
+			}
+			frame.off('select').on('select', function () {
 				const attachment = frame.state().get('selection').first().toJSON();
 				$input.val(attachment.url || '');
 			});

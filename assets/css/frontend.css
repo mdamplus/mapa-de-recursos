@@ -64,14 +64,62 @@
 }
 
 .mdr-entity-detail {
-	padding: 1rem 0;
+	padding: 0;
+}
+
+.mdr-entity-banner {
+	background: #ff9500;
+	color: #fff;
+	padding: 18px 0;
+}
+
+.mdr-entity-banner-inner {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 0 1rem;
+	display: flex;
+	justify-content: flex-start;
+	flex-direction: column;
+	gap: 6px;
+	text-align: left;
+}
+
+.mdr-entity-banner-title {
+	font-size: 20px;
+	font-weight: 600;
+}
+
+.mdr-entity-banner-name {
+	font-size: 28px;
+	font-weight: 700;
 }
 
 .mdr-entity-map {
-	height: 320px;
-	border: 1px solid #e5e5e5;
-	border-radius: 8px;
-	margin-bottom: 1rem;
+	height: 420px;
+	width: 100%;
+	border: 0;
+	border-radius: 0;
+	margin: 0;
+}
+
+.mdr-entity-hero {
+	width: 100%;
+	position: relative;
+}
+
+.mdr-entity-container {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 1rem;
+}
+
+.mdr-entity-title {
+	margin: 0;
+	font-size: 26px;
+}
+
+.mdr-entity-name {
+	margin: 0 0 12px;
 }
 
 .mdr-entity-columns {
@@ -86,26 +134,150 @@
 	height: auto;
 }
 
+.mdr-entity-info {
+	background: #f5f5f5;
+	padding: 12px;
+	border-radius: 6px;
+	margin-bottom: 12px;
+}
+
 .mdr-entity-services {
 	list-style: disc inside;
 	padding: 0;
 	margin: 0;
 }
 
+.mdr-entity-desc {
+	margin-top: 12px;
+}
+
 .mdr-entity-posts {
 	margin-top: 2rem;
 }
 
+.mdr-entity-services-table {
+	margin-top: 1.5rem;
+}
+
+.mdr-service-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.mdr-service-row {
+	display: grid;
+	grid-template-columns: 50px 1fr 140px;
+	gap: 12px;
+	align-items: center;
+	padding: 10px;
+	border: 1px solid #e5e5e5;
+	border-radius: 8px;
+}
+
+.mdr-service-icon {
+	text-align: center;
+	font-size: 22px;
+	color: #555;
+}
+
+.mdr-service-title {
+	font-weight: 600;
+	margin-bottom: 6px;
+}
+
+.mdr-service-meta div {
+	margin-bottom: 4px;
+	font-size: 14px;
+}
+
+.mdr-service-actions {
+	text-align: right;
+}
+
 .mdr-entities-btn {
 	background: #ff9500;
-	border-color: #ff9500;
+	border: none;
 	color: #fff;
 }
 .mdr-entities-btn:hover,
 .mdr-entities-btn:focus {
 	background: #e08600;
-	border-color: #e08600;
+	border: none;
 	color: #fff;
+}
+
+.mdr-popup-logo img {
+	max-width: 120px;
+	height: auto;
+	display: block;
+	margin-bottom: 6px;
+}
+
+.mdr-popup-title {
+	display: block;
+	margin-bottom: 6px;
+}
+
+.mdr-popup-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 14px;
+	line-height: 1.4;
+	margin-bottom: 8px;
+}
+
+.mdr-popup-icon {
+	display: inline-flex;
+	width: 16px;
+	justify-content: center;
+	color: #555;
+}
+
+.mdr-map-actions {
+	position: absolute;
+	right: 12px;
+	bottom: 12px;
+	display: flex;
+	gap: 8px;
+	z-index: 800;
+}
+
+.mdr-map-action-btn {
+	position: relative;
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	background: #ff9500;
+	color: #fff;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	text-decoration: none;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.mdr-map-action-btn:hover .mdr-map-tooltip {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0);
+}
+
+.mdr-map-tooltip {
+	position: absolute;
+	bottom: 46px;
+	right: 0;
+	background: #111;
+	color: #fff;
+	padding: 6px 10px;
+	border-radius: 4px;
+	font-size: 12px;
+	white-space: nowrap;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(6px);
+	transition: all 0.15s ease;
 }
 
 @media (min-width: 960px) {

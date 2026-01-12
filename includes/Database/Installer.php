@@ -64,6 +64,7 @@ class Installer {
 				telefono varchar(50) DEFAULT NULL,
 				email varchar(190) DEFAULT NULL,
 				web varchar(190) DEFAULT NULL,
+				descripcion longtext DEFAULT NULL,
 				direccion_linea1 varchar(190) DEFAULT NULL,
 				cp varchar(20) DEFAULT NULL,
 				ciudad varchar(120) DEFAULT NULL,

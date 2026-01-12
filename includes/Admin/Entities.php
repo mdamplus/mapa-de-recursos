@@ -55,6 +55,7 @@ class Entities {
 		$provincia   = isset($_POST['provincia']) ? sanitize_text_field(wp_unslash($_POST['provincia'])) : '';
 		$pais        = isset($_POST['pais']) ? sanitize_text_field(wp_unslash($_POST['pais'])) : '';
 		$web         = isset($_POST['web']) ? esc_url_raw(wp_unslash($_POST['web'])) : '';
+		$descripcion = isset($_POST['descripcion']) ? wp_kses_post(wp_unslash($_POST['descripcion'])) : '';
 
 		if ('' === $nombre) {
 			add_settings_error('mdr_entidades', 'nombre_required', __('El nombre es obligatorio.', 'mapa-de-recursos'), 'error');
@@ -96,9 +97,10 @@ class Entities {
 			'provincia'         => $provincia,
 			'pais'              => $pais,
 			'web'               => $web,
+			'descripcion'       => $descripcion,
 		];
 
-		$format = ['%s','%s','%s','%s','%s','%d','%f','%f','%d','%s','%s','%s','%s','%s'];
+		$format = ['%s','%s','%s','%s','%s','%d','%f','%f','%d','%s','%s','%s','%s','%s','%s'];
 
 		if ($id > 0) {
 			$wpdb->update($table, $data, ['id' => $id], $format, ['%d']);
@@ -147,6 +149,9 @@ class Entities {
 			<div class="mdr-admin-grid">
 				<div class="mdr-admin-col">
 					<h2><?php echo $editing ? esc_html__('Editar entidad', 'mapa-de-recursos') : esc_html__('Nueva entidad', 'mapa-de-recursos'); ?></h2>
+					<?php if ($editing && ! empty($editing->slug)) : ?>
+						<p><a class="button button-primary" target="_blank" href="<?php echo esc_url(trailingslashit(home_url('/entidades/' . $editing->slug))); ?>"><?php esc_html_e('Ver en la web', 'mapa-de-recursos'); ?></a></p>
+					<?php endif; ?>
 					<form method="post">
 						<?php wp_nonce_field('mdr_save_entity', 'mdr_entity_nonce'); ?>
 						<input type="hidden" name="id" value="<?php echo $editing ? esc_attr((string) $editing->id) : ''; ?>" />
@@ -166,6 +171,24 @@ class Entities {
 							<tr>
 								<th><label for="web"><?php esc_html_e('Web', 'mapa-de-recursos'); ?></label></th>
 								<td><input type="url" name="web" id="web" class="regular-text" value="<?php echo $editing ? esc_attr($editing->web) : ''; ?>"></td>
+							</tr>
+							<tr>
+								<th><label for="descripcion"><?php esc_html_e('Descripción', 'mapa-de-recursos'); ?></label></th>
+								<td>
+									<?php
+									$desc = $editing ? (string) $editing->descripcion : '';
+									wp_editor(
+										$desc,
+										'mdr_entidad_descripcion',
+										[
+											'textarea_name' => 'descripcion',
+											'textarea_rows' => 5,
+											'media_buttons' => false,
+											'teeny' => true,
+										]
+									);
+									?>
+								</td>
 							</tr>
 							<tr>
 								<th><label for="logo_url"><?php esc_html_e('Logo', 'mapa-de-recursos'); ?></label></th>

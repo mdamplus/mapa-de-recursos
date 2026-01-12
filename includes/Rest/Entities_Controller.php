@@ -44,6 +44,7 @@ class Entities_Controller extends WP_REST_Controller {
 		$servicio = $request->get_param('servicio');
 		$q = $request->get_param('q');
 		$all = (bool) $request->get_param('all');
+		$include_empty = (bool) $request->get_param('include_empty');
 
 		$params_for_cache = [
 			'bbox'         => $bbox,
@@ -53,6 +54,7 @@ class Entities_Controller extends WP_REST_Controller {
 			'servicio'     => $servicio,
 			'q'            => $q,
 			'all'          => $all,
+			'include_empty' => $include_empty,
 		];
 
 		$cache_key = 'mdr_entidades_' . md5(wp_json_encode($params_for_cache));
@@ -70,7 +72,10 @@ class Entities_Controller extends WP_REST_Controller {
 		$joins   = [];
 		$params  = [];
 
-		$joins[] = "INNER JOIN {$table_recursos} r ON r.entidad_id = e.id AND r.activo = 1 AND (r.periodo_fin IS NULL OR r.periodo_fin >= CURDATE())";
+		$needs_join = ! $include_empty || ! empty($ambito) || ! empty($subcategoria) || ! empty($servicio);
+		if ($needs_join) {
+			$joins[] = "INNER JOIN {$table_recursos} r ON r.entidad_id = e.id AND r.activo = 1 AND (r.periodo_fin IS NULL OR r.periodo_fin >= CURDATE())";
+		}
 
 		if ($bbox) {
 			$where[]  = 'e.lat IS NOT NULL AND e.lng IS NOT NULL';
@@ -115,7 +120,7 @@ class Entities_Controller extends WP_REST_Controller {
 		$where_sql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 		$sql = "
-			SELECT DISTINCT e.id, e.nombre, e.slug, e.lat, e.lng, e.zona_id, e.telefono, e.email, e.logo_url, e.logo_media_id
+			SELECT DISTINCT e.id, e.nombre, e.slug, e.lat, e.lng, e.zona_id, e.telefono, e.email, e.logo_url, e.logo_media_id, e.direccion_linea1
 			FROM {$table_entidades} e
 			" . implode(' ', $joins) . "
 			{$where_sql}
@@ -138,6 +143,7 @@ class Entities_Controller extends WP_REST_Controller {
 					'email'    => $row['email'],
 					'logo_url' => $row['logo_url'],
 					'logo_media_id' => isset($row['logo_media_id']) ? (int) $row['logo_media_id'] : null,
+					'direccion' => $row['direccion_linea1'] ?? '',
 				];
 			},
 			$results
@@ -184,6 +190,11 @@ class Entities_Controller extends WP_REST_Controller {
 				'type'        => 'boolean',
 				'required'    => false,
 				'description' => __('Si es true ignora bbox y devuelve todas las entidades (máx 2000).', 'mapa-de-recursos'),
+			],
+			'include_empty' => [
+				'type'        => 'boolean',
+				'required'    => false,
+				'description' => __('Si es true devuelve también entidades sin recursos activos.', 'mapa-de-recursos'),
 			],
 		];
 	}

@@ -43,6 +43,8 @@ class Plugin {
 		add_action('init', [$this, 'register_shortcodes']);
 		add_action('rest_api_init', [$this, 'register_rest_routes']);
 		add_action('admin_menu', [$this, 'register_admin']);
+		add_action('wp_ajax_mdr_agenda_load', [$this, 'ajax_agenda_load']);
+		add_action('wp_ajax_nopriv_mdr_agenda_load', [$this, 'ajax_agenda_load']);
 		add_action('init', [$this, 'add_entity_rewrite']);
 		add_filter('query_vars', [$this, 'add_entity_query_var']);
 		add_action('template_redirect', [$this, 'maybe_render_entity_route']);
@@ -67,6 +69,7 @@ class Plugin {
 		add_shortcode('mapa_de_recursos', [$this, 'render_shortcode']);
 		add_shortcode('mdr_entidades_mapa', [$this, 'render_entities_map_shortcode']);
 		add_shortcode('mdr_entidad', [$this, 'render_entity_detail_shortcode']);
+		add_shortcode('eracis_agenda', [$this, 'render_agenda_shortcode']);
 	}
 
 	public function register_rest_routes(): void {
@@ -204,6 +207,11 @@ class Plugin {
 				'defaultRadiusKm' => (float) $settings['default_radius_km'],
 				'fallbackCenter'  => $settings['fallback_center'],
 				'defaultZona'     => $settings['default_zona'],
+				'markerIcons'     => [
+					'entidad' => $settings['entity_marker_url'] ?? '',
+					'servicio' => $settings['service_marker_url'] ?? '',
+					'recurso' => $settings['recurso_marker_url'] ?? '',
+				],
 				'i18n'            => [
 					'loading'     => __('Cargando recursos...', 'mapa-de-recursos'),
 					'noResults'   => __('No hay recursos en este radio.', 'mapa-de-recursos'),
@@ -394,11 +402,39 @@ class Plugin {
 		}
 		$table_ent = "{$wpdb->prefix}mdr_entidades";
 		$table_rec = "{$wpdb->prefix}mdr_recursos";
-		$entity = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_ent} WHERE slug = %s", $slug));
+		$table_zonas = "{$wpdb->prefix}mdr_zonas";
+		$entity = $wpdb->get_row($wpdb->prepare("SELECT e.*, z.nombre AS zona_nombre FROM {$table_ent} e LEFT JOIN {$table_zonas} z ON z.id = e.zona_id WHERE e.slug = %s", $slug));
 		if (! $entity) {
 			return '';
 		}
-		$recursos = (array) $wpdb->get_results($wpdb->prepare("SELECT id, recurso_programa, descripcion FROM {$table_rec} WHERE entidad_id = %d AND activo = 1 ORDER BY id DESC LIMIT 50", $entity->id));
+		$recursos = (array) $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT r.id, r.recurso_programa, r.descripcion, r.objetivo, r.destinatarios, r.periodo_ejecucion, r.servicio_id, s.icono_clase, s.nombre AS servicio_nombre, a.nombre AS ambito_nombre
+				FROM {$table_rec} r
+				LEFT JOIN {$wpdb->prefix}mdr_servicios s ON s.id = r.servicio_id
+				LEFT JOIN {$wpdb->prefix}mdr_ambitos a ON a.id = r.ambito_id
+				WHERE r.entidad_id = %d AND r.activo = 1
+				ORDER BY r.id DESC
+				LIMIT 200",
+				$entity->id
+			)
+		);
+		$entity_url = trailingslashit(home_url('/entidades/' . $slug));
+		$gmaps_link = '';
+		if (! empty($entity->lat) && ! empty($entity->lng)) {
+			$gmaps_link = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($entity->lat . ',' . $entity->lng);
+		} elseif (! empty($entity->direccion_linea1)) {
+			$gmaps_link = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($entity->direccion_linea1);
+		}
+		$whatsapp_text_parts = [
+			$entity->nombre,
+			$entity->direccion_linea1 ?: '',
+			$entity->email ?: '',
+			$entity->telefono ?: '',
+			$entity_url,
+		];
+		$whatsapp_text = rawurlencode(implode(' | ', array_filter($whatsapp_text_parts)));
+		$whatsapp_link = 'https://wa.me/?text=' . $whatsapp_text;
 
 		// Posts recientes (3).
 		$posts = get_posts([
@@ -418,48 +454,119 @@ class Plugin {
 		<div class="mdr-entity-detail">
 			<div class="mdr-entity-hero">
 				<div class="mdr-entity-map" id="mdr-entity-map" data-lat="<?php echo esc_attr((string) $entity->lat); ?>" data-lng="<?php echo esc_attr((string) $entity->lng); ?>" data-name="<?php echo esc_attr($entity->nombre); ?>"></div>
+				<?php if ($gmaps_link || $whatsapp_link) : ?>
+					<div class="mdr-map-actions">
+						<?php if ($gmaps_link) : ?>
+							<a class="mdr-map-action-btn" href="<?php echo esc_url($gmaps_link); ?>" target="_blank" rel="noopener noreferrer" title="<?php esc_attr_e('Enviar a Google Maps', 'mapa-de-recursos'); ?>">
+								<i class="fa-solid fa-location-arrow"></i>
+								<span class="mdr-map-tooltip"><?php esc_html_e('Enviar a Google Maps', 'mapa-de-recursos'); ?></span>
+							</a>
+						<?php endif; ?>
+						<a class="mdr-map-action-btn" href="<?php echo esc_url($whatsapp_link); ?>" target="_blank" rel="noopener noreferrer" title="<?php esc_attr_e('Compartir por WhatsApp', 'mapa-de-recursos'); ?>">
+							<i class="fa-brands fa-whatsapp"></i>
+							<span class="mdr-map-tooltip"><?php esc_html_e('Compartir por WhatsApp', 'mapa-de-recursos'); ?></span>
+						</a>
+					</div>
+				<?php endif; ?>
 			</div>
-			<div class="mdr-entity-columns">
-				<div class="mdr-entity-col">
-					<h2><?php echo esc_html($entity->nombre); ?></h2>
-					<p><?php echo esc_html($entity->direccion_linea1); ?></p>
-					<p><?php echo esc_html($entity->telefono); ?></p>
-					<p><?php echo esc_html($entity->email); ?></p>
-					<?php if ($logo) : ?>
-						<div class="mdr-entity-logo"><img src="<?php echo esc_url($logo); ?>" alt="<?php echo esc_attr($entity->nombre); ?>" /></div>
-					<?php endif; ?>
+			<div class="mdr-entity-banner">
+				<div class="mdr-entity-banner-inner">
+					<h2 class="mdr-entity-banner-title"><?php esc_html_e('Entidad Eracis +', 'mapa-de-recursos'); ?></h2>
+					<h1 class="mdr-entity-banner-name"><?php echo esc_html($entity->nombre); ?></h1>
 				</div>
-				<div class="mdr-entity-col">
-					<h3><?php esc_html_e('Servicios', 'mapa-de-recursos'); ?></h3>
+			</div>
+			<div class="mdr-entity-container">
+				<div class="mdr-entity-columns">
+					<div class="mdr-entity-col">
+						<?php if ($logo) : ?>
+							<div class="mdr-entity-logo"><img src="<?php echo esc_url($logo); ?>" alt="<?php echo esc_attr($entity->nombre); ?>" /></div>
+						<?php endif; ?>
+						<div class="mdr-entity-info">
+							<?php if ($entity->direccion_linea1) : ?>
+								<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-location-dot"></i></span><span><?php echo esc_html($entity->direccion_linea1); ?></span></div>
+								<div class="mdr-popup-row">
+									<a class="button mdr-entities-btn" target="_blank" rel="noopener noreferrer" href="<?php echo esc_url('https://www.google.com/maps/search/?api=1&query=' . rawurlencode($entity->direccion_linea1)); ?>"><?php esc_html_e('Enviar a Google Maps', 'mapa-de-recursos'); ?></a>
+								</div>
+							<?php endif; ?>
+							<?php if ($entity->telefono) : ?>
+								<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-phone"></i></span><a href="tel:<?php echo esc_attr($entity->telefono); ?>"><?php echo esc_html($entity->telefono); ?></a></div>
+							<?php endif; ?>
+							<?php if ($entity->email) : ?>
+								<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-envelope"></i></span><a href="mailto:<?php echo esc_attr($entity->email); ?>"><?php echo esc_html($entity->email); ?></a></div>
+							<?php endif; ?>
+							<?php if ($entity->zona_nombre) : ?>
+								<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-map"></i></span><span><?php echo esc_html($entity->zona_nombre); ?></span></div>
+							<?php endif; ?>
+						</div>
+						<?php if (! empty($entity->descripcion)) : ?>
+							<div class="mdr-entity-desc"><?php echo wp_kses_post($entity->descripcion); ?></div>
+						<?php endif; ?>
+					</div>
+					<div class="mdr-entity-col">
+						<h3><?php esc_html_e('Sobre esta entidad', 'mapa-de-recursos'); ?></h3>
+						<?php if (! empty($entity->descripcion)) : ?>
+							<div class="mdr-entity-desc"><?php echo wp_kses_post($entity->descripcion); ?></div>
+						<?php else : ?>
+							<p><?php esc_html_e('Sin descripción disponible.', 'mapa-de-recursos'); ?></p>
+						<?php endif; ?>
+					</div>
+				</div>
+				<div class="mdr-entity-services-table">
+					<h3><?php esc_html_e('Servicios activos', 'mapa-de-recursos'); ?></h3>
 					<?php if ($recursos) : ?>
-						<ul class="mdr-entity-services">
+						<div class="mdr-service-list">
 							<?php foreach ($recursos as $rec) : ?>
-								<li>
-									<strong><?php echo esc_html($rec->recurso_programa); ?></strong>
-									<div><?php echo esc_html(wp_trim_words((string) $rec->descripcion, 20)); ?></div>
-								</li>
+								<div class="mdr-service-row">
+									<div class="mdr-service-icon">
+										<?php if (! empty($rec->icono_clase)) : ?>
+											<i class="<?php echo esc_attr($rec->icono_clase); ?>"></i>
+										<?php else : ?>
+											<i class="fa-solid fa-circle-info"></i>
+										<?php endif; ?>
+									</div>
+									<div class="mdr-service-main">
+										<div class="mdr-service-title"><?php echo esc_html($rec->recurso_programa); ?></div>
+										<div class="mdr-service-meta">
+											<?php if (! empty($rec->objetivo)) : ?>
+												<div><strong><?php esc_html_e('Objetivo:', 'mapa-de-recursos'); ?></strong> <?php echo esc_html($rec->objetivo); ?></div>
+											<?php endif; ?>
+											<?php if (! empty($rec->destinatarios)) : ?>
+												<div><strong><?php esc_html_e('Destinatarios:', 'mapa-de-recursos'); ?></strong> <?php echo esc_html($rec->destinatarios); ?></div>
+											<?php endif; ?>
+											<?php if (! empty($rec->periodo_ejecucion)) : ?>
+												<div><strong><?php esc_html_e('Periodo:', 'mapa-de-recursos'); ?></strong> <?php echo esc_html($rec->periodo_ejecucion); ?></div>
+											<?php endif; ?>
+											<?php if (! empty($rec->ambito_nombre)) : ?>
+												<div><strong><?php esc_html_e('Ámbito:', 'mapa-de-recursos'); ?></strong> <?php echo esc_html($rec->ambito_nombre); ?></div>
+											<?php endif; ?>
+										</div>
+									</div>
+									<div class="mdr-service-actions">
+										<a class="button mdr-entities-btn" href="<?php echo esc_url(trailingslashit(home_url('/recursos/' . sanitize_title($rec->recurso_programa) . '-' . $entity->slug))); ?>"><?php esc_html_e('Descubrir', 'mapa-de-recursos'); ?></a>
+									</div>
+								</div>
 							<?php endforeach; ?>
-						</ul>
+						</div>
 					<?php else : ?>
 						<p><?php esc_html_e('Sin servicios activos.', 'mapa-de-recursos'); ?></p>
 					<?php endif; ?>
 				</div>
-			</div>
-			<?php if ($posts) : ?>
-				<div class="mdr-entity-posts">
-					<h3><?php esc_html_e('Publicaciones recientes', 'mapa-de-recursos'); ?></h3>
-					<div class="mdr-post-grid">
-						<?php foreach ($posts as $post) : ?>
-							<a class="mdr-post-card" href="<?php echo esc_url(get_permalink($post)); ?>">
-								<?php if (has_post_thumbnail($post)) : ?>
-									<div class="mdr-post-thumb"><?php echo get_the_post_thumbnail($post, 'medium'); ?></div>
-								<?php endif; ?>
-								<div class="mdr-post-title"><?php echo esc_html(get_the_title($post)); ?></div>
-							</a>
-						<?php endforeach; ?>
+				<?php if ($posts) : ?>
+					<div class="mdr-entity-posts">
+						<h3><?php esc_html_e('Publicaciones recientes', 'mapa-de-recursos'); ?></h3>
+						<div class="mdr-post-grid">
+							<?php foreach ($posts as $post) : ?>
+								<a class="mdr-post-card" href="<?php echo esc_url(get_permalink($post)); ?>">
+									<?php if (has_post_thumbnail($post)) : ?>
+										<div class="mdr-post-thumb"><?php echo get_the_post_thumbnail($post, 'medium'); ?></div>
+									<?php endif; ?>
+									<div class="mdr-post-title"><?php echo esc_html(get_the_title($post)); ?></div>
+								</a>
+							<?php endforeach; ?>
+						</div>
 					</div>
-				</div>
-			<?php endif; ?>
+				<?php endif; ?>
+			</div>
 		</div>
 		<script>
 		document.addEventListener('DOMContentLoaded', function(){
@@ -478,6 +585,44 @@ class Plugin {
 		</script>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	public function render_agenda_shortcode(array $atts = []): string {
+		$settings = $this->get_settings();
+		$api = ! empty($settings['agenda_api_url']) ? $settings['agenda_api_url'] : 'https://asociacionarrabal.org/wp-json/wp/v2/agenda';
+		$agenda = new EracisAgenda($api);
+		return $agenda->render($atts);
+	}
+
+	public function ajax_agenda_load(): void {
+		check_ajax_referer('mdr_agenda_load', 'nonce');
+		$settings = $this->get_settings();
+		$api = ! empty($settings['agenda_api_url']) ? $settings['agenda_api_url'] : 'https://asociacionarrabal.org/wp-json/wp/v2/agenda';
+		$agenda = new EracisAgenda($api);
+		$page = isset($_POST['page']) ? (int) $_POST['page'] : 1;
+		$per_page = isset($_POST['per_page']) ? (int) $_POST['per_page'] : 9;
+		$atts = [
+			'per_page' => $per_page,
+			'page' => $page,
+			'orderby' => sanitize_key($_POST['orderby'] ?? 'date'),
+			'order' => sanitize_text_field($_POST['order'] ?? 'desc'),
+			'search' => sanitize_text_field($_POST['search'] ?? ''),
+			'mode' => sanitize_text_field($_POST['mode'] ?? 'all'),
+		];
+		$result = $agenda->get_events($atts, false);
+		if (is_wp_error($result)) {
+			wp_send_json_error(['message' => __('No se pudo cargar más eventos.', 'mapa-de-recursos')]);
+		}
+		if (is_wp_error($result['events'])) {
+			wp_send_json_error(['message' => __('No se pudo cargar más eventos.', 'mapa-de-recursos')]);
+		}
+		$events = $agenda->filter_by_mode($result['events'], $atts['mode']);
+		$html = $agenda->render_cards_html($events);
+		$has_more = count($events) >= $per_page;
+		wp_send_json_success([
+			'html' => $html,
+			'has_more' => $has_more,
+		]);
 	}
 
 	public function plugin_action_links(array $links): array {
@@ -501,6 +646,16 @@ class Plugin {
 		if (! $slug) {
 			return;
 		}
+		global $wpdb;
+		$table_ent = "{$wpdb->prefix}mdr_entidades";
+		$entity_name = (string) $wpdb->get_var($wpdb->prepare("SELECT nombre FROM {$table_ent} WHERE slug = %s", $slug));
+		if (! $entity_name) {
+			return;
+		}
+		add_filter('document_title_parts', function ($parts) use ($entity_name) {
+			$parts['title'] = sprintf('%s 👉 Eracis +', $entity_name);
+			return $parts;
+		});
 		status_header(200);
 		nocache_headers();
 		$content = $this->render_entity_detail_shortcode(['slug' => $slug]);
@@ -534,6 +689,9 @@ class Plugin {
 			'fa_kit'            => 'f2eb5a66e3',
 			'load_bulma_front'  => 1,
 			'entity_marker_url' => '',
+			'service_marker_url' => '',
+			'recurso_marker_url' => '',
+			'agenda_api_url'    => 'https://asociacionarrabal.org/wp-json/wp/v2/agenda',
 		];
 
 		$saved = get_option('mapa_de_recursos_settings', []);

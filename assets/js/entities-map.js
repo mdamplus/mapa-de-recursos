@@ -20,6 +20,7 @@
 		setStatus(mdrEntities.strings.loading);
 		const url = new URL(mdrEntities.restUrl);
 		url.searchParams.set('all', '1');
+		url.searchParams.set('include_empty', '1');
 		return fetch(url.toString(), {
 			headers: {
 				'X-WP-Nonce': mdrEntities.nonce
@@ -62,14 +63,18 @@
 			const logo = item.logo_url || '';
 			const phone = item.telefono || '';
 			const mail = item.email || '';
+			const addr = item.direccion || '';
 			const btn = '<a class="button is-small mdr-entities-btn" href="' + mdrEntities.entityUrlBase + encodeURIComponent(item.slug) + '">' + mdrEntities.strings.viewServices + '</a>';
 			const popup = `
 				<div class="mdr-popup">
-					<strong>${item.nombre}</strong><br>
 					${logo ? '<div class="mdr-popup-logo"><img src="' + logo + '" alt="' + item.nombre + '"></div>' : ''}
-					${phone ? '<div>' + phone + '</div>' : ''}
-					${mail ? '<div>' + mail + '</div>' : ''}
-					<div style="margin-top:6px;">${btn}</div>
+					<div class="mdr-popup-body">
+						<strong class="mdr-popup-title">${item.nombre}</strong>
+						${phone ? '<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-phone"></i></span><a href="tel:' + phone + '">' + phone + '</a></div>' : ''}
+						${mail ? '<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-envelope"></i></span><a href="mailto:' + mail + '">' + mail + '</a></div>' : ''}
+						${addr ? '<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-location-dot"></i></span><span>' + addr + '</span></div>' : ''}
+						<div class="mdr-popup-row" style="margin-top:6px;">${btn}</div>
+					</div>
 				</div>
 			`;
 			marker.bindPopup(popup);

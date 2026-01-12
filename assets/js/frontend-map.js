@@ -185,16 +185,29 @@
 	}
 
 	function buildBbox() {
-		if (!state.map) {
-			return null;
+		// Calcula un bbox alrededor del centro (geolocalización o fallback) usando el radio configurado,
+		// para priorizar cercanía al usuario.
+		const center = state.center;
+		const km = state.radiusKm || radiusKmDefault;
+		if (!center || typeof center.lat === 'undefined' || typeof center.lng === 'undefined') {
+			if (!state.map) {
+				return null;
+			}
+			const bounds = state.map.getBounds();
+			return [
+				bounds.getWest().toFixed(6),
+				bounds.getSouth().toFixed(6),
+				bounds.getEast().toFixed(6),
+				bounds.getNorth().toFixed(6),
+			].join(',');
 		}
-		const bounds = state.map.getBounds();
-		return [
-			bounds.getWest().toFixed(6),
-			bounds.getSouth().toFixed(6),
-			bounds.getEast().toFixed(6),
-			bounds.getNorth().toFixed(6),
-		].join(',');
+		const latDelta = km / 111; // aprox
+		const lngDelta = km / (111 * Math.cos(toRad(center.lat) || 1));
+		const minLat = (center.lat - latDelta).toFixed(6);
+		const maxLat = (center.lat + latDelta).toFixed(6);
+		const minLng = (center.lng - lngDelta).toFixed(6);
+		const maxLng = (center.lng + lngDelta).toFixed(6);
+		return [minLng, minLat, maxLng, maxLat].join(',');
 	}
 
 	async function loadEntities() {
@@ -228,6 +241,10 @@
 				}
 				const dist = haversineKm(state.center.lat, state.center.lng, item.lat, item.lng);
 				return dist <= state.radiusKm;
+			}).sort((a, b) => {
+				const da = haversineKm(state.center.lat, state.center.lng, a.lat, a.lng);
+				const db = haversineKm(state.center.lat, state.center.lng, b.lat, b.lng);
+				return da - db;
 			});
 			renderEntities(filtered);
 			setStatus(filtered.length ? '' : window.mdrData.i18n.noResults);
@@ -242,15 +259,32 @@
 		if (!Array.isArray(entities)) {
 			return;
 		}
+		let customIcon = null;
+		if (window.mdrData.markerIcons && window.mdrData.markerIcons.entidad) {
+			customIcon = L.icon({
+				iconUrl: window.mdrData.markerIcons.entidad,
+				iconSize: [38, 38],
+				iconAnchor: [19, 38],
+				popupAnchor: [0, -26],
+			});
+		}
 		const listItems = [];
 		entities.forEach((item) => {
-			const marker = L.marker([item.lat, item.lng]);
+			const marker = L.marker([item.lat, item.lng], customIcon ? { icon: customIcon } : undefined);
+			const logo = item.logo_url || '';
+			const phone = item.telefono || '';
+			const mail = item.email || '';
+			const addr = item.direccion || '';
 			const popupHtml = `
 				<div class="mdr-popup">
-					<strong>${escapeHtml(item.nombre || '')}</strong><br />
-					${item.email ? `<a href="mailto:${escapeHtml(item.email)}">${escapeHtml(item.email)}</a><br />` : ''}
-					${item.telefono ? `<a href="tel:${escapeHtml(item.telefono)}">${escapeHtml(item.telefono)}</a><br />` : ''}
-					<button class="mdr-view-resources" data-entidad="${item.id}">${window.mdrData.i18n.viewResources}</button>
+					${logo ? `<div class="mdr-popup-logo"><img src="${escapeHtml(logo)}" alt="${escapeHtml(item.nombre || '')}"></div>` : ''}
+					<div class="mdr-popup-body">
+						<strong class="mdr-popup-title">${escapeHtml(item.nombre || '')}</strong>
+						${phone ? `<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-phone"></i></span><a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a></div>` : ''}
+						${mail ? `<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-envelope"></i></span><a href="mailto:${escapeHtml(mail)}">${escapeHtml(mail)}</a></div>` : ''}
+						${addr ? `<div class="mdr-popup-row"><span class="mdr-popup-icon"><i class="fa-solid fa-location-dot"></i></span><span>${escapeHtml(addr)}</span></div>` : ''}
+						<button class="button mdr-entities-btn mdr-view-resources" data-entidad="${item.id}">${window.mdrData.i18n.viewResources}</button>
+					</div>
 				</div>
 			`;
 			marker.bindPopup(popupHtml);
