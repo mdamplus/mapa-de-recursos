@@ -16,12 +16,14 @@
 
 .mdr-agenda-thumb {
 	background: #f5f5f5;
+	min-height: 180px;
 }
 
 .mdr-agenda-thumb--placeholder {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	padding: 12px;
 }
 
 .mdr-agenda-thumb img {
@@ -33,7 +35,10 @@
 
 .mdr-agenda-thumb--placeholder img {
 	object-fit: contain;
-	padding: 16px;
+	width: auto;
+	height: auto;
+	max-width: 90%;
+	max-height: 150px;
 }
 
 .mdr-agenda-body {
@@ -51,16 +56,17 @@
 }
 
 .mdr-agenda-badge {
-	background: #ff9500;
+	background: var(--mdr-badge-bg, #ff9500);
 	color: #fff;
 	border-radius: 999px;
 	padding: 4px 10px;
 	font-size: 12px;
+	font-weight: 600;
 }
 
 .mdr-agenda-badge-ghost {
-	background: #f5f5f5;
-	color: #555;
+	background: var(--mdr-badge-bg, #f5f5f5);
+	color: #fff;
 }
 
 .mdr-agenda-title {

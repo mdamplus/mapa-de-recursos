@@ -618,7 +618,7 @@ class Plugin {
 		}
 		$events = $agenda->filter_by_mode($result['events'], $atts['mode']);
 		$html = $agenda->render_cards_html($events);
-		$has_more = count($events) >= $per_page;
+		$has_more = ! empty($result['has_more']);
 		wp_send_json_success([
 			'html' => $html,
 			'has_more' => $has_more,

@@ -64,7 +64,7 @@ class EracisAgenda {
 		$this->enqueue_assets();
 
 		ob_start();
-		$has_more = count($events) >= (int) $atts['per_page'];
+		$has_more = ! empty($result['has_more']);
 		$attrs = [
 			'data-per-page' => (int) $atts['per_page'],
 			'data-page' => (int) $atts['page'],
@@ -123,27 +123,62 @@ class EracisAgenda {
 	}
 
 	public function get_events(array $atts, bool $return_html = false) {
+		$per_page = min(50, max(1, (int) ($atts['per_page'] ?? 9)));
+		$page     = max(1, (int) ($atts['page'] ?? 1));
+		$fetch_count = 100; // trae el máximo permitido para tener margen de paginación
+		$orderby  = sanitize_key($atts['orderby'] ?? 'date');
+		$order    = in_array(strtolower((string) ($atts['order'] ?? 'desc')), ['asc', 'desc'], true) ? strtolower((string) $atts['order']) : 'desc';
+		$search   = ! empty($atts['search']) ? sanitize_text_field($atts['search']) : '';
+
 		$params = [
-			'per_page' => min(50, max(1, (int) $atts['per_page'])),
-			'page'     => max(1, (int) $atts['page']),
-			'orderby'  => sanitize_key($atts['orderby']),
-			'order'    => in_array(strtolower((string) $atts['order']), ['asc', 'desc'], true) ? strtolower((string) $atts['order']) : 'desc',
+			'per_page' => $fetch_count,
+			'page'     => 1,
+			'orderby'  => $orderby,
+			'order'    => $order,
 			'_embed'   => '1',
 		];
-		if (! empty($atts['search'])) {
-			$params['search'] = sanitize_text_field($atts['search']);
+		if ($search !== '') {
+			$params['search'] = $search;
 		}
 
-		$url = $this->api_url . '?' . http_build_query($params, '', '&');
-		$cache_key = 'mdr_agenda_' . md5($url);
+		$agenda_url = $this->api_url . '?' . http_build_query($params, '', '&');
+		$cache_key = 'mdr_agenda_v4_' . md5($agenda_url . '|posts|per_page:' . $per_page . '|page:' . $page . '|order:' . $order . '|search:' . $search);
 		$cached = get_transient($cache_key);
 		if ($cached !== false) {
-			$has_more = count($cached) >= $params['per_page'];
-			return $return_html
-				? ['events' => $cached, 'html' => $this->render_cards_html($cached), 'has_more' => $has_more]
-				: ['events' => $cached, 'has_more' => $has_more];
+			return $this->build_events_response($cached, $per_page, $page, $return_html);
 		}
 
+		$events_result = $this->fetch_agenda_events($agenda_url);
+		if (is_wp_error($events_result)) {
+			return $events_result;
+		}
+
+		$posts_result = $this->fetch_agenda_posts($fetch_count, $order, $search, $orderby);
+
+		$combined_items = array_merge($events_result['items'], $posts_result['items']);
+		$combined_items = $this->sort_items($combined_items, $order, $orderby);
+		$payload = [
+			'items' => $combined_items,
+			'total' => (int) $events_result['total'] + (int) $posts_result['total'],
+		];
+
+		set_transient($cache_key, $payload, HOUR_IN_SECONDS);
+		return $this->build_events_response($payload, $per_page, $page, $return_html);
+	}
+
+	private function build_events_response(array $data, int $per_page, int $page, bool $return_html) {
+		$items = $data['items'] ?? [];
+		$total = (int) ($data['total'] ?? count($items));
+		$offset = ($page - 1) * $per_page;
+		$page_events = array_slice($items, $offset, $per_page);
+		$has_more = $total > ($offset + $per_page);
+
+		return $return_html
+			? ['events' => $page_events, 'html' => $this->render_cards_html($page_events), 'has_more' => $has_more]
+			: ['events' => $page_events, 'has_more' => $has_more];
+	}
+
+	private function fetch_agenda_events(string $url) {
 		$response = wp_remote_get($url, [
 			'timeout' => 10,
 		]);
@@ -170,19 +205,158 @@ class EracisAgenda {
 			$events[] = $this->map_event($item);
 		}
 
-		set_transient($cache_key, $events, HOUR_IN_SECONDS);
-		if ($return_html) {
-			return [
-				'events' => $events,
-				'html' => $this->render_cards_html($events),
-				'has_more' => count($events) >= $params['per_page'],
-			];
+		$total = (int) wp_remote_retrieve_header($response, 'x-wp-total');
+		if ($total <= 0) {
+			$total = count($events);
 		}
 
 		return [
-			'events' => $events,
-			'has_more' => count($events) >= $params['per_page'],
+			'items' => $events,
+			'total' => $total,
 		];
+	}
+
+	private function fetch_agenda_posts(int $per_page, string $order, string $search, string $orderby): array {
+		$posts_url = $this->build_posts_api_url();
+		if ($posts_url === '') {
+			return ['items' => [], 'total' => 0];
+		}
+
+		$params = [
+			'per_page'   => $per_page,
+			'page'       => 1,
+			'orderby'    => $orderby,
+			'order'      => $order,
+			'categories' => 14,
+			'status'     => 'publish',
+			'_embed'     => '1',
+		];
+		if ($search !== '') {
+			$params['search'] = $search;
+		}
+
+		$url = $posts_url . '?' . http_build_query($params, '', '&');
+		$response = wp_remote_get($url, ['timeout' => 10]);
+		if (is_wp_error($response)) {
+			$this->log_error('Agenda posts: ' . $response->get_error_message());
+			return ['items' => [], 'total' => 0];
+		}
+
+		$code = wp_remote_retrieve_response_code($response);
+		$body = wp_remote_retrieve_body($response);
+		if ($code !== 200 || empty($body)) {
+			$this->log_error('Agenda posts HTTP error ' . $code);
+			return ['items' => [], 'total' => 0];
+		}
+
+		$data = json_decode($body, true);
+		if (! is_array($data)) {
+			$this->log_error('Agenda posts JSON decode failed');
+			return ['items' => [], 'total' => 0];
+		}
+
+		$posts = [];
+		foreach ($data as $item) {
+			$posts[] = $this->map_post_as_event($item);
+		}
+
+		$total = (int) wp_remote_retrieve_header($response, 'x-wp-total');
+		if ($total <= 0) {
+			$total = count($posts);
+		}
+
+		return [
+			'items' => $posts,
+			'total' => $total,
+		];
+	}
+
+	private function build_posts_api_url(): string {
+		// Usamos el sitio actual para que la categoría "agenda" (ID 14) se lea desde esta web.
+		return trailingslashit(home_url()) . 'wp-json/wp/v2/posts';
+	}
+
+	private function map_post_as_event(array $item): array {
+		$title = isset($item['title']['rendered']) ? wp_strip_all_tags((string) $item['title']['rendered']) : '';
+		$link  = isset($item['link']) ? esc_url_raw($item['link']) : '';
+
+		$featured = $this->placeholder;
+		$is_placeholder = true;
+		if (! empty($item['_embedded']['wp:featuredmedia'][0]['source_url'])) {
+			$featured = esc_url_raw($item['_embedded']['wp:featuredmedia'][0]['source_url']);
+			$is_placeholder = false;
+		}
+
+		$placeholder_bg = $is_placeholder ? $this->get_palette_color() : '';
+
+		$excerpt = '';
+		if (! empty($item['excerpt']['rendered'])) {
+			$excerpt = wp_trim_words(wp_strip_all_tags($item['excerpt']['rendered']), 30);
+		} elseif (! empty($item['content']['rendered'])) {
+			$excerpt = wp_trim_words(wp_strip_all_tags($item['content']['rendered']), 30);
+		}
+
+		$meta = [
+			'inicio'    => '',
+			'fin'       => '',
+			'lugar'     => '',
+			'organiza'  => '',
+			'inicio_ts' => $this->parse_post_timestamp($item),
+		];
+		if (! empty($meta['inicio_ts'])) {
+			$meta['inicio'] = wp_date(get_option('date_format'), (int) $meta['inicio_ts'], wp_timezone());
+		}
+
+		$terms = $this->parse_terms($item['_embedded']['wp:term'] ?? []);
+
+		return [
+			'title'           => $title,
+			'link'            => $link,
+			'featured'        => $featured,
+			'excerpt'         => $excerpt,
+			'meta'            => $meta,
+			'terms'           => $terms,
+			'inicio_ts'       => $meta['inicio_ts'],
+			'estado'          => '',
+			'is_placeholder'  => $is_placeholder,
+			'placeholder_bg'  => $placeholder_bg,
+		];
+	}
+
+	private function parse_post_timestamp(array $item) {
+		$date_string = $item['date'] ?? '';
+		if ($date_string === '') {
+			return null;
+		}
+		$dt = date_create($date_string, wp_timezone());
+		return $dt ? $dt->getTimestamp() : null;
+	}
+
+	private function sort_items(array $items, string $order, string $orderby = 'date'): array {
+		$direction = strtolower($order) === 'asc' ? 1 : -1;
+		$orderby = $orderby ?: 'date';
+		usort(
+			$items,
+			static function (array $a, array $b) use ($direction, $orderby): int {
+				if ($orderby === 'title') {
+					$a_title = strtolower((string) ($a['title'] ?? ''));
+					$b_title = strtolower((string) ($b['title'] ?? ''));
+					return strcmp($a_title, $b_title) * $direction;
+				}
+
+				$a_ts = (int) ($a['inicio_ts'] ?? 0);
+				$b_ts = (int) ($b['inicio_ts'] ?? 0);
+				if ($a_ts === $b_ts) {
+					return 0;
+				}
+				return ($a_ts < $b_ts ? -1 : 1) * $direction;
+			}
+		);
+		return $items;
+	}
+
+	private function get_palette_color(): string {
+		return $this->placeholder_colors[array_rand($this->placeholder_colors)];
 	}
 
 	private function map_event(array $item): array {
@@ -198,7 +372,7 @@ class EracisAgenda {
 			$is_placeholder = false;
 		}
 
-		$placeholder_bg = $is_placeholder ? $this->placeholder_colors[array_rand($this->placeholder_colors)] : '';
+		$placeholder_bg = $is_placeholder ? $this->get_palette_color() : '';
 
 		$excerpt = '';
 		if (! empty($item['excerpt']['rendered'])) {
@@ -246,6 +420,11 @@ class EracisAgenda {
 					];
 				} elseif ($term['taxonomy'] === 'ubicaciones-eventos') {
 					$out['ubicaciones'][] = [
+						'name' => $term['name'] ?? '',
+						'link' => $term['link'] ?? '',
+					];
+				} elseif ($term['taxonomy'] === 'category') {
+					$out['categorias'][] = [
 						'name' => $term['name'] ?? '',
 						'link' => $term['link'] ?? '',
 					];
@@ -332,7 +511,7 @@ class EracisAgenda {
 		}
 		$placeholder_bg = $event['placeholder_bg'] ?? '';
 		if ($is_placeholder && $placeholder_bg === '') {
-			$placeholder_bg = $this->placeholder_colors[array_rand($this->placeholder_colors)];
+			$placeholder_bg = $this->get_palette_color();
 		}
 		$thumb_classes = ['mdr-agenda-thumb'];
 		if ($is_placeholder) {
@@ -354,10 +533,18 @@ class EracisAgenda {
 			<div class="mdr-agenda-body">
 				<div class="mdr-agenda-terms">
 					<?php foreach ($event['terms']['categorias'] as $term) : ?>
-						<span class="mdr-agenda-badge"><?php echo esc_html($term['name']); ?></span>
+						<?php
+						$badge_color = $this->get_palette_color();
+						$badge_style = ' style="--mdr-badge-bg: ' . esc_attr($badge_color) . ';"';
+						?>
+						<span class="mdr-agenda-badge"<?php echo $badge_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>><?php echo esc_html($term['name']); ?></span>
 					<?php endforeach; ?>
 					<?php foreach ($event['terms']['ubicaciones'] as $term) : ?>
-						<span class="mdr-agenda-badge mdr-agenda-badge-ghost"><?php echo esc_html($term['name']); ?></span>
+						<?php
+						$badge_color = $this->get_palette_color();
+						$badge_style = ' style="--mdr-badge-bg: ' . esc_attr($badge_color) . ';"';
+						?>
+						<span class="mdr-agenda-badge mdr-agenda-badge-ghost"<?php echo $badge_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>><?php echo esc_html($term['name']); ?></span>
 					<?php endforeach; ?>
 				</div>
 				<h3 class="mdr-agenda-title"><a target="_blank" rel="noopener noreferrer" href="<?php echo esc_url($event['link']); ?>"><?php echo esc_html($event['title']); ?></a></h3>
