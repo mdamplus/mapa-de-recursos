@@ -70,6 +70,7 @@ class Plugin {
 		add_shortcode('mdr_entidades_mapa', [$this, 'render_entities_map_shortcode']);
 		add_shortcode('mdr_entidad', [$this, 'render_entity_detail_shortcode']);
 		add_shortcode('eracis_agenda', [$this, 'render_agenda_shortcode']);
+		add_shortcode('eracis_empleo', [$this, 'render_empleo_shortcode']);
 	}
 
 	public function register_rest_routes(): void {
@@ -592,6 +593,12 @@ class Plugin {
 		$api = ! empty($settings['agenda_api_url']) ? $settings['agenda_api_url'] : 'https://asociacionarrabal.org/wp-json/wp/v2/agenda';
 		$agenda = new EracisAgenda($api);
 		return $agenda->render($atts);
+	}
+
+	public function render_empleo_shortcode(array $atts = []): string {
+		$feed_url = $atts['feed_url'] ?? 'https://arrabalempleo.agenciascolocacion.com/rss';
+		$jobs = new EracisEmpleo($feed_url);
+		return $jobs->render($atts);
 	}
 
 	public function ajax_agenda_load(): void {
